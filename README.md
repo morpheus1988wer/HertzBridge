@@ -21,6 +21,10 @@ HertzBridge operates by:
 *   **Log Parsing**: Actively monitoring `com.apple.Music` system logs to extract real-time streaming metadata not exposed by standard APIs.
 *   **AppleScript Bridge**: Low-impact metadata fetching for Track/Artist/Album context.
 *   **CoreAudio (C-APIs)**: Direct hardware communication with your DAC to set the physical clock without resampling.
+## ✨ Vibe Coded
+HertzBridge is "vibe coded"—built with passion to solve a shared problem. I'll do my best to address improvements and fix errors as they arise, but please keep in mind this is a community project maintained in spare time.
+## ⚠️ Disclaimer
+**Use at your own risk.** Usage of this application does not make the developer liable for any damage caused to your DAC, Mac, or any other hardware. By using this software, you agree that you are solely responsible for its impact on your system.
 ## 🤝 Credits
 HertzBridge is a technical evolution of concepts pioneered by the community. Special thanks to [Vincent Neo](https://github.com/vincentneo) for the foundational research into log-based rate detection on macOS.
 ---
