@@ -55,8 +55,5 @@ public class FileParser {
         return (sampleRate, nil)
     }
     
-    // Legacy method for backward compatibility
-    public func getSampleRate(path: String) -> Double? {
-        return getAudioFormat(path: path)?.sampleRate
-    }
+
 }

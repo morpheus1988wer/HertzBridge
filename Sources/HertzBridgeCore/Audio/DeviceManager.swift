@@ -1,11 +1,10 @@
 import Foundation
 import CoreAudio
 
-public struct AudioDeviceCompat: Equatable {
+public struct AudioDeviceInfo: Equatable {
     public let id: AudioDeviceID
     public let name: String
     public let sampleRate: Double // Nominal rate
-    // We simplify for the UI model, but internally we need complex structs
 }
 
 public struct StreamFormat {
@@ -23,7 +22,7 @@ public class DeviceManager {
     
     private init() {}
     
-    public func getAllOutputDevices() -> [AudioDeviceCompat] {
+    public func getAllOutputDevices() -> [AudioDeviceInfo] {
         var propertySize = UInt32(0)
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
@@ -55,7 +54,7 @@ public class DeviceManager {
         
         guard errData == noErr else { return [] }
         
-        var devices: [AudioDeviceCompat] = []
+        var devices: [AudioDeviceInfo] = []
         for id in deviceIDs {
             // Filter for Output devices only
             if isOutputDevice(id) {
@@ -80,7 +79,7 @@ public class DeviceManager {
         return err == noErr && propertySize > 0
     }
     
-    public func getDefaultOutputDevice() -> AudioDeviceCompat? {
+    public func getDefaultOutputDevice() -> AudioDeviceInfo? {
         var deviceID = AudioDeviceID(0)
         var propertySize = UInt32(MemoryLayout<AudioDeviceID>.size)
         var propertyAddress = AudioObjectPropertyAddress(
@@ -102,7 +101,7 @@ public class DeviceManager {
         return getDeviceInfo(deviceID)
     }
     
-    public func getDeviceInfo(_ deviceID: AudioDeviceID) -> AudioDeviceCompat? {
+    public func getDeviceInfo(_ deviceID: AudioDeviceID) -> AudioDeviceInfo? {
         var deviceName = "" as CFString
         var propertySize = UInt32(MemoryLayout<CFString>.size)
         var propertyAddress = AudioObjectPropertyAddress(
@@ -120,7 +119,7 @@ public class DeviceManager {
         err = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, &nominalSampleRate)
         if err != noErr { nominalSampleRate = 0 }
         
-        return AudioDeviceCompat(
+        return AudioDeviceInfo(
             id: deviceID,
             name: deviceName as String,
             sampleRate: nominalSampleRate
@@ -163,7 +162,6 @@ public class DeviceManager {
         // print("Target: \(sampleRate)Hz / \(bitDepth ?? 0)bit")
         
         // Find best matching format from Real Driver Capabilities
-        let targetDepth = bitDepth ?? 24 // Default preference
         
         // Filter ranges that support the requested sample rate
         // AudioStreamRangedDescription contains an ASBD (mFormat) and a sample rate range
@@ -206,9 +204,6 @@ public class DeviceManager {
             })
             
             for range in sortedRanges {
-                let depth = range.mFormat.mBitsPerChannel
-                // print("  Attempting \(depth)bit flavor...")
-                
                 var formatToSet = range.mFormat
                 formatToSet.mSampleRate = sampleRate
                 

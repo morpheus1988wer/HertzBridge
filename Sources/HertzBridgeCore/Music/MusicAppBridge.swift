@@ -35,11 +35,7 @@ public class MusicAppBridge {
             return nil
         }
         
-        let track = parseRobustOutput(output)
-        if let track = track {
-            // print("MusicAppBridge: Detected track '\(track.name)' by \(track.artist)")
-        }
-        return track
+        return parseRobustOutput(output)
     }
     
     private func runScript() -> String? {
@@ -50,7 +46,7 @@ public class MusicAppBridge {
             return nil
         }
     
-        let robustScript = """
+        let fetchTrackMetadataScript = """
         tell application "Music"
             if player state is playing then
                 try
@@ -74,7 +70,7 @@ public class MusicAppBridge {
         
         let process = Process()
         process.launchPath = "/usr/bin/osascript"
-        process.arguments = ["-e", robustScript]
+        process.arguments = ["-e", fetchTrackMetadataScript]
         
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -91,7 +87,7 @@ public class MusicAppBridge {
         return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
-    // Updated parser for the robust script
+    // Updated parser for the metadata script
     private func parseRobustOutput(_ raw: String) -> MusicTrack? {
         let parts = raw.components(separatedBy: "|||")
         // Now expects 4 parts: Name, Artist, Album, Location

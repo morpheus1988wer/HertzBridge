@@ -29,9 +29,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         // Setup Switcher Service
         switcher.delegate = self
         
-        // Setup Switcher Service
-        switcher.delegate = self
-        
         switcher.start()
         
         // Initial Update
@@ -65,7 +62,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         statusMenu.addItem(deviceFormatItem)
         statusMenu.addItem(NSMenuItem.separator())
         
-        // SECTION 2: DEVICE SELECTOR
+        // SECTION: DEVICE SELECTION
         let deviceMenuItem = NSMenuItem(title: "Select Output Device", action: nil, keyEquivalent: "")
         deviceListSubmenu = NSMenu()
         deviceMenuItem.submenu = deviceListSubmenu
@@ -73,7 +70,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         
         statusMenu.addItem(NSMenuItem.separator())
         
-        // SECTION 3: MANUAL OVERRIDE
+        // SECTION: MANUAL CONTROL
         let overrideMenuItem = NSMenuItem(title: "Manual Sample Rate", action: nil, keyEquivalent: "")
         let overrideSubmenu = NSMenu()
         
@@ -96,7 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         
         statusMenu.addItem(NSMenuItem.separator())
         
-        // SECTION 4: SETTINGS
+        // SECTION: SETTINGS
         let autostartItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleAutostart(_:)), keyEquivalent: "")
         autostartItem.state = isLaunchAtLogin() ? .on : .off
         statusMenu.addItem(autostartItem)

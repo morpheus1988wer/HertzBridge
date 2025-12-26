@@ -9,23 +9,23 @@ public class SwitcherService: LogParserDelegate {
     public static let shared = SwitcherService()
     
     private var isRunning = false
-    private var firstTrack = true // First track after app starts
-    private var activePollInterval: TimeInterval = 0.1 // Very fast track change detection
-    private var idlePollInterval: TimeInterval = 20.0 // Slow during playback
+    private var isSystemInitializing = true // First track after app starts
+    private var transitionPollInterval: TimeInterval = 0.1 // Fast polling during changes
+    private var playbackPollInterval: TimeInterval = 20.0 // Slow polling during stable playback
     private var pollTimer: Timer?
-    private var currentTrackHash: String = ""
+    private var trackIdentityHash: String = ""
     private var pendingSwitchTimer: Timer?
-    private var hasAlreadySwitched: Bool = false
+    private var isSwitchOperationApplied: Bool = false
     
-    // v1.9 State: Album Continuity
+    // Track Monitoring state
     private var previousAlbum: String?
     private var confirmedAlbumRate: Double?
     
-    // V2 State
+    // Public Configuration & State
     public weak var delegate: SwitcherServiceDelegate?
     public var selectedDeviceID: AudioDeviceID? = nil
     
-    // v2.0 UI State tracking (to prevent redundant flashes)
+    // UI State tracking (to prevent redundant flashes)
     private var lastReportedTrackName: String?
     private var lastReportedDeviceFormat: String?
     private var lastReportedDeviceName: String?
@@ -56,32 +56,31 @@ public class SwitcherService: LogParserDelegate {
         logParser.delegate = self
         
         // Register for Music app notifications
+        // Note: Music.app still broadcasts as 'com.apple.iTunes' for backward compatibility
         NotificationCenter.default.addObserver(self,
                                                selector: #selector(musicPlayerStateChanged),
-                                               name: NSNotification.Name("com.apple.iTunes.playerInfo"), // For Music.app
+                                               name: NSNotification.Name("com.apple.iTunes.playerInfo"),
                                                object: nil)
         NotificationCenter.default.addObserver(self,
                                                selector: #selector(musicPlayerStateChanged),
-                                               name: NSNotification.Name("com.apple.Music.playerInfo"), // For Music.app (newer macOS)
+                                               name: NSNotification.Name("com.apple.Music.playerInfo"), 
                                                object: nil)
     }
     
     public func start() {
         guard !isRunning else { return }
         isRunning = true
-        firstTrack = true // Reset on app start
+        isSystemInitializing = true // Reset on app start
         
-        // Re-enable log parsing with improved filtering
         logParser.startMonitoring()
         
         // Reset to standard 44.1kHz on startup
         if let device = deviceManager.getDefaultOutputDevice() {
-            print("🚀 Startup: Resetting \(device.name) to 44.1kHz")
             _ = deviceManager.setFormat(deviceID: device.id, sampleRate: 44100.0)
         }
         
         checkForTrackChange()
-        setPollInterval(activePollInterval) // Start with fast polling
+        setPollInterval(transitionPollInterval) // Start with fast polling
     }
     
     public func stop() {
@@ -100,29 +99,21 @@ public class SwitcherService: LogParserDelegate {
     }
     
     // Delegate from LogParser - store the latest detected rate
-    private var latestLogRate: Double?
-    private var stableRateStartTime: Date?
-    private var stableRate: Double?
+    private var detectedStreamRate: Double?
+    private var candidateRateStartTime: Date?
+    private var candidateRate: Double?
     
     public func didDetectSampleRate(_ rate: Double) {
         // Store latest log rate for streaming tracks
-        latestLogRate = rate
-        // print("SwitcherService: Stored latestLogRate = \(rate)Hz")
+        detectedStreamRate = rate
         
         // Track rate stability
-        if let stable = stableRate, abs(stable - rate) < 0.1 {
+        if let candidate = candidateRate, abs(candidate - rate) < 0.1 {
             // Same rate as before - stability continues
         } else {
             // Different rate - restart stability tracking
-            stableRate = rate
-            stableRateStartTime = Date()
-            // print("📊 Rate stability: Started tracking \(rate)Hz")
-        }
-        
-        // Check if rate has been stable for 3+ seconds
-        if let startTime = stableRateStartTime,
-           Date().timeIntervalSince(startTime) >= 3.0 {
-            // print("✅ Rate stability: \(rate)Hz stable for 3+ seconds")
+            candidateRate = rate
+            candidateRateStartTime = Date()
         }
     }
     
@@ -147,9 +138,7 @@ public class SwitcherService: LogParserDelegate {
         
         let track = musicBridge.getCurrentTrack()
         
-        // v2.0: Decouple Device Format display from Track lifecycle
-        // This ensures the menu bar shows the DAC's rate even if Music is off.
-        var targetDevice: AudioDeviceCompat?
+        var targetDevice: AudioDeviceInfo?
         if let userID = selectedDeviceID {
             targetDevice = deviceManager.getDeviceInfo(userID)
         } else {
@@ -163,9 +152,9 @@ public class SwitcherService: LogParserDelegate {
         }
         
         if track == nil {
-            if !currentTrackHash.isEmpty {
-                currentTrackHash = ""
-                hasAlreadySwitched = false
+            if !trackIdentityHash.isEmpty {
+                trackIdentityHash = ""
+                isSwitchOperationApplied = false
             }
             updateUI(
                 status: "Idle",
@@ -183,19 +172,19 @@ public class SwitcherService: LogParserDelegate {
         let trackHash = "\(track.name)|\(track.artist)"
         
         // Check if track changed
-        if trackHash != currentTrackHash {
-            // v1.9 Optimization: Same-Album Continuity
+        if trackHash != trackIdentityHash {
+            // Smart Album Continuity
             // If we are on the same album and have a confirmed rate, we trust it persists.
-            let isSameAlbum = (firstTrack == false) && (previousAlbum != nil) && (track.album == previousAlbum)
+            let isSameAlbum = (isSystemInitializing == false) && (previousAlbum != nil) && (track.album == previousAlbum)
             
-            currentTrackHash = trackHash
+            trackIdentityHash = trackHash
             previousAlbum = track.album // Update for next time
-            hasAlreadySwitched = false
+            isSwitchOperationApplied = false
             
             // Default behavior: Reset stability
-            stableRate = nil
-            stableRateStartTime = nil
-            setPollInterval(activePollInterval)
+            candidateRate = nil
+            candidateRateStartTime = nil
+            setPollInterval(transitionPollInterval)
             pendingSwitchTimer?.invalidate()
             pendingSwitchTimer = nil
             
@@ -215,8 +204,8 @@ public class SwitcherService: LogParserDelegate {
                 // Check for Same-Album "Instant Path"
                 if isSameAlbum, let expectedRate = confirmedAlbumRate {
                     print("💿 Same Album ('\(track.album ?? "-")') detected. Preserving \(expectedRate)Hz.")
-                    // Manually set the 'latestLogRate' to what we expect, so determineFormat picks it up
-                    latestLogRate = expectedRate
+                    // Manually set the 'detectedStreamRate' to what we expect, so determineFormat picks it up
+                    detectedStreamRate = expectedRate
                     
                     // Instant Switch (0.1s to allow UI breath)
                     pendingSwitchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
@@ -267,7 +256,7 @@ public class SwitcherService: LogParserDelegate {
             // If the logs match the CURRENT device rate (same rate), we can trust it faster (0.5s).
             // If the logs show a NEW rate, we must be strict (2.0s) to avoid glitches/lag.
             let requiredDuration: TimeInterval
-            if let devRate = currentDeviceRate, let logRate = self.stableRate,
+            if let devRate = currentDeviceRate, let logRate = self.candidateRate,
                abs(devRate - logRate) < 0.1 {
                 requiredDuration = 0.5 // Fast Path: Same rate, just confirm briefly
             } else {
@@ -275,8 +264,8 @@ public class SwitcherService: LogParserDelegate {
             }
             
             // Check stability
-            if let startTime = self.stableRateStartTime,
-               let rate = self.stableRate,
+            if let startTime = self.candidateRateStartTime,
+               let rate = self.candidateRate,
                Date().timeIntervalSince(startTime) >= requiredDuration {
                 
                 let pathName = requiredDuration < 1.0 ? "FAST" : "STRICT"
@@ -301,19 +290,13 @@ public class SwitcherService: LogParserDelegate {
     }
     
     private func performDelayedSwitch(for track: MusicTrack) {
-        guard !hasAlreadySwitched else { return }
-        hasAlreadySwitched = true
-        
-        // print("🔍 performDelayedSwitch called for '\(track.name)'")
-        // print("🔍 track.location = \(track.location?.description ?? "nil (streaming)")")
-        // print("🔍 latestLogRate before determineFormat = \(latestLogRate?.description ?? "nil")")
+        guard !isSwitchOperationApplied else { return }
+        isSwitchOperationApplied = true
         
         let (requiredRate, requiredDepth) = determineFormat(for: track)
         
-        // print("🔍 determineFormat returned: \(requiredRate)Hz / \(requiredDepth?.description ?? "nil")bit")
-        
         // Determine Target Device
-        var targetDevice: AudioDeviceCompat?
+        var targetDevice: AudioDeviceInfo?
         if let userID = selectedDeviceID {
             targetDevice = deviceManager.getDeviceInfo(userID)
         } else {
@@ -344,19 +327,18 @@ public class SwitcherService: LogParserDelegate {
             // Update UI after switch
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 self.updateUIForTrack(track, beforeSwitch: false)
-                // v1.9: Confirm this rate for the album
+                // Confirm this rate for the album
                 self.confirmedAlbumRate = requiredRate
-                // print("💿 Album Rate Confirmed: \(requiredRate)Hz")
                 
-                self.setPollInterval(self.idlePollInterval)
+                self.setPollInterval(self.playbackPollInterval)
             }
         } else {
             // Already correct format
             updateUIForTrack(track, beforeSwitch: false)
-            // v1.9: Confirm this rate for the album
+            // Confirm this rate for the album
             self.confirmedAlbumRate = requiredRate
              
-            setPollInterval(idlePollInterval)
+            setPollInterval(playbackPollInterval)
         }
     }
     
@@ -368,7 +350,7 @@ public class SwitcherService: LogParserDelegate {
             "\(Int(requiredRate))Hz (stream)"
         }
         
-        var targetDevice: AudioDeviceCompat?
+        var targetDevice: AudioDeviceInfo?
         if let userID = selectedDeviceID {
             targetDevice = deviceManager.getDeviceInfo(userID)
         } else {
@@ -401,21 +383,15 @@ public class SwitcherService: LogParserDelegate {
         }
         
         // Priority 2: Streaming - use log-detected rate if available
-        // print("Stream detection: latestLogRate = \(latestLogRate?.description ?? "nil")")
-        if let logRate = latestLogRate {
-            // print("Using log-detected rate: \(logRate)Hz for stream")
+        if let logRate = detectedStreamRate {
             return (logRate, nil) // nil = ignore bit depth for streams
         }
         
         // Priority 3: Fallback for streams (CD quality)
-        // print("No log rate detected, falling back to 44.1kHz")
         return (44100.0, nil)
     }
     
-    // Legacy method kept for compatibility
-    private func determineSampleRate(for track: MusicTrack) -> Double {
-        return determineFormat(for: track).sampleRate
-    }
+
     
     private func getDeviceFormatString(for id: AudioDeviceID? = nil) -> String {
         let targetID = id ?? (selectedDeviceID ?? deviceManager.getDefaultOutputDevice()?.id)
