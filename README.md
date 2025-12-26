@@ -12,7 +12,7 @@ Built on the technical foundations of projects like Vincent Neo's *LosslessSwitc
 *   **Zero-Interference**: Intelligently pre-checks if the Music app is running before querying, ensuring it never accidentally launches the player on startup.
 *   **Minimalist UI**: Ultra-compact menu bar item with variable-width display (e.g., "44k", "192k") to minimize clutter.
 ## 🛠️ Installation & Usage
-1.  Download the latest [HertzBridge.dmg](HertzBridge_v1.0.dmg).
+1.  Download the latest [HertzBridge_v1.0_Release.zip](HertzBridge_v1.0_Release.zip).
 2.  Drag to Applications.
 3.  Open HertzBridge. It will appear in your Menu Bar.
 4.  Optionally, enable **Launch at Login** from the menu.
