@@ -29,6 +29,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         // Setup Switcher Service
         switcher.delegate = self
         
+        // Setup Switcher Service
+        switcher.delegate = self
+        
         switcher.start()
         
         // Initial Update
@@ -40,7 +43,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         statusMenu.delegate = self // To refresh device list on open
         
         // BRANDING HEADER
-        let headerItem = NSMenuItem(title: "HertzBridge v1.1", action: nil, keyEquivalent: "")
+        let headerItem = NSMenuItem(title: "HertzBridge v1.0", action: nil, keyEquivalent: "")
         headerItem.isEnabled = false
         statusMenu.addItem(headerItem)
         statusMenu.addItem(NSMenuItem.separator())
@@ -62,7 +65,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         statusMenu.addItem(deviceFormatItem)
         statusMenu.addItem(NSMenuItem.separator())
         
-        // SECTION: DEVICE SELECTION
+        // SECTION 2: DEVICE SELECTOR
         let deviceMenuItem = NSMenuItem(title: "Select Output Device", action: nil, keyEquivalent: "")
         deviceListSubmenu = NSMenu()
         deviceMenuItem.submenu = deviceListSubmenu
@@ -70,7 +73,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         
         statusMenu.addItem(NSMenuItem.separator())
         
-        // SECTION: MANUAL CONTROL
+        // SECTION 3: MANUAL OVERRIDE
         let overrideMenuItem = NSMenuItem(title: "Manual Sample Rate", action: nil, keyEquivalent: "")
         let overrideSubmenu = NSMenu()
         
@@ -93,7 +96,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         
         statusMenu.addItem(NSMenuItem.separator())
         
-        // SECTION: SETTINGS
+        // SECTION 4: SETTINGS
         let autostartItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleAutostart(_:)), keyEquivalent: "")
         autostartItem.state = isLaunchAtLogin() ? .on : .off
         statusMenu.addItem(autostartItem)

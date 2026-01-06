@@ -9,11 +9,9 @@ public class SwitcherService: LogParserDelegate {
     public static let shared = SwitcherService()
     
     private var isRunning = false
-    private var isSystemInitializing = true    // v2.0: Faster Heartbeat
-    // Since Native API (v1.9) is cheap, we can poll frequently to catch updates 
-    // even if notifications fail completely.
-    private let playbackPollInterval: TimeInterval = 3.0
-    private let transitionPollInterval: TimeInterval = 0.51 // Fast polling during changes
+    private var isSystemInitializing = true // First track after app starts
+    private var transitionPollInterval: TimeInterval = 0.1 // Fast polling during changes
+    private var playbackPollInterval: TimeInterval = 20.0 // Slow polling during stable playback
     private var pollTimer: Timer?
     private var trackIdentityHash: String = ""
     private var pendingSwitchTimer: Timer?
@@ -59,17 +57,14 @@ public class SwitcherService: LogParserDelegate {
         
         // Register for Music app notifications
         // Note: Music.app still broadcasts as 'com.apple.iTunes' for backward compatibility
-        // Register for Distributed Notifications (Critical for instant detection)
-        // Music.app broadcasts 'com.apple.iTunes.playerInfo' globally
-        DistributedNotificationCenter.default().addObserver(self,
-                                                           selector: #selector(musicPlayerStateChanged),
-                                                           name: NSNotification.Name("com.apple.iTunes.playerInfo"),
-                                                           object: nil)
-        
-        DistributedNotificationCenter.default().addObserver(self,
-                                                           selector: #selector(musicPlayerStateChanged),
-                                                           name: NSNotification.Name("com.apple.Music.playerInfo"),
-                                                           object: nil)
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(musicPlayerStateChanged),
+                                               name: NSNotification.Name("com.apple.iTunes.playerInfo"),
+                                               object: nil)
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(musicPlayerStateChanged),
+                                               name: NSNotification.Name("com.apple.Music.playerInfo"), 
+                                               object: nil)
     }
     
     public func start() {
@@ -103,161 +98,81 @@ public class SwitcherService: LogParserDelegate {
         }
     }
     
-    // v1.7: Aggressive Polling Mode
-    // Forces fast polling for a short window (5s) to catch laggy state updates
-    private func startAggressivePolling() {
-        setPollInterval(0.5)
-        
-        // Revert to slow polling after 5 seconds if no change detected
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-            guard let self = self else { return }
-            // Only revert if we haven't locked onto a new track transition
-            if self.pendingSwitchTimer == nil && !self.isSwitchOperationApplied {
-                self.setPollInterval(self.playbackPollInterval)
-            }
-        }
-    }
-    
     // Delegate from LogParser - store the latest detected rate
     private var detectedStreamRate: Double?
     private var candidateRateStartTime: Date?
     private var candidateRate: Double?
-    private var lastTrackChangeTime: Date = Date.distantPast // v1.4: Sync point
     
-    public func didDetectSampleRate(_ rate: Double, at timestamp: Date) {
-        // v1.5: Sync Check with Tolerance
-        // System logs might be slightly "older" than our Date() capture due to IPC latency.
-        // We use a 2.0s "Safety Window".
-        // If the log is MORE than 2.0s older than our change time, it's definitely stale.
-        // If it's within that window (e.g. -0.2s), it's likely the new track starting.
-        let tolerance: TimeInterval = 2.0
-        if timestamp < lastTrackChangeTime.addingTimeInterval(-tolerance) {
-             // print("🚫 Ignoring stale log: \(rate)Hz (Time: \(timestamp) < Window)")
-             return
-        }
-        
-        // v2.0: Dual-Trigger System
-        // If we see a log, it means the audio engine is active/changing.
-        // We use this as a signal to check the metadata, in case the Notification failed.
-        // Since logs can spam, startAggressivePolling() handles the throttling (idempotent).
-        startAggressivePolling()
-        
+    public func didDetectSampleRate(_ rate: Double) {
         // Store latest log rate for streaming tracks
         detectedStreamRate = rate
         
-        // Track rate stability (now using fast 0.2s path because we TRUST the timestamp)
+        // Track rate stability
         if let candidate = candidateRate, abs(candidate - rate) < 0.1 {
             // Same rate as before - stability continues
         } else {
             // Different rate - restart stability tracking
             candidateRate = rate
             candidateRateStartTime = Date()
-            
-            // v2.1: Immediate Feedback
-            // Update UI instantly to show we found a candidate rate ("Detecting...")
-            // This prevents the "dead" feeling while waiting for stability.
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            let rateStr = formatter.string(from: NSNumber(value: rate)) ?? "\(rate)"
-            
-            if let currentDevice = deviceManager.getDeviceInfo(selectedDeviceID ?? deviceManager.getDefaultOutputDevice()?.id ?? 0) {
-                updateUI(
-                    status: "Detecting...", 
-                    trackFormat: "\(rateStr)Hz?", 
-                    deviceFormat: getDeviceFormatString(for: currentDevice.id),
-                    deviceName: currentDevice.name
-                )
-            }
         }
     }
-
     
     // MARK: - Notification Handling
     @objc private func musicPlayerStateChanged(notification: Notification) {
-        // v2.4: Cleaned up unused variable warning
-        // We just need to know if userInfo exists, we don't need to read it yet.
-        guard notification.userInfo != nil else { return }
+        guard let userInfo = notification.userInfo else { return }
         
-        // v1.8: Removed Strict Filter
-        // We now react to ALL playerInfo notifications.
-        // It's better to poll unnecessarily (Aggressive Mode) than to miss a track change 
-        // because the notification didn't have "Name" or "Artist" keys yet.
-        // guard let _ = userInfo["Name"] as? String,
-        //       let _ = userInfo["Artist"] as? String else {
-        //     return
-        // }
+        // Strict Filter: Only process if Name and Artist are present
+        // This filters out playback time updates and other noise
+        guard let _ = userInfo["Name"] as? String,
+              let _ = userInfo["Artist"] as? String else {
+            // print("🔇 Ignored notification (missing metadata)")
+            return
+        }
         
         // Use throttle check to limit processing
         checkForTrackChange()
-        
-        // v1.7: Aggressive Polling Mode
-        // We trigger a 5-second window of fast polling (0.5s) on EVERY notification.
-        // This covers any variable latency from Music.app (100ms... 3s).
-        startAggressivePolling()
     }
     
     private func checkForTrackChange() {
         guard isRunning else { return }
         
-        // v1.9: Run AppleScript on background thread to prevent UI blocking
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            
-            let track = self.musicBridge.getCurrentTrack()
-            
-            // Hop back to main for device checks and UI updates
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                guard self.isRunning else { return } // Re-check validity
-                
-                var targetDevice: AudioDeviceInfo?
-                if let userID = self.selectedDeviceID {
-                    targetDevice = self.deviceManager.getDeviceInfo(userID)
-                } else {
-                    targetDevice = self.deviceManager.getDefaultOutputDevice()
-                }
-                
-                let deviceFormatStr = if let device = targetDevice {
-                    self.getDeviceFormatString(for: device.id)
-                } else {
-                    "Unknown"
-                }
-                
-                if track == nil {
-                    if !self.trackIdentityHash.isEmpty {
-                        self.trackIdentityHash = ""
-                        self.isSwitchOperationApplied = false
-                    }
-                    self.updateUI(
-                        status: "Idle",
-                        trackFormat: "-",
-                        deviceFormat: deviceFormatStr,
-                        deviceName: targetDevice?.name
-                    )
-                    return
-                }
-                
-                // If track exists, proceed with standard change detection
-                self.processTrackChange(track: track!, targetDevice: targetDevice)
-            }
+        let track = musicBridge.getCurrentTrack()
+        
+        var targetDevice: AudioDeviceInfo?
+        if let userID = selectedDeviceID {
+            targetDevice = deviceManager.getDeviceInfo(userID)
+        } else {
+            targetDevice = deviceManager.getDefaultOutputDevice()
         }
-    }
-    
-    // Split out logic for clearer flow
-    private func processTrackChange(track: MusicTrack, targetDevice: AudioDeviceInfo?) {
+        
+        let deviceFormatStr = if let device = targetDevice {
+            getDeviceFormatString(for: device.id)
+        } else {
+            "Unknown"
+        }
+        
+        if track == nil {
+            if !trackIdentityHash.isEmpty {
+                trackIdentityHash = ""
+                isSwitchOperationApplied = false
+            }
+            updateUI(
+                status: "Idle",
+                trackFormat: "-",
+                deviceFormat: deviceFormatStr,
+                deviceName: targetDevice?.name
+            )
+            return
+        }
+        
+        // If track exists, proceed with standard change detection
+        guard let track = track else { return }
+        
         // Create unique hash for this track
         let trackHash = "\(track.name)|\(track.artist)"
         
         // Check if track changed
         if trackHash != trackIdentityHash {
-             // ... Logic continues below (reusing existing flow) ...
-             // We need to implement the rest of the original function logic here
-             self.handleNewTrackDetected(track: track, trackHash: trackHash)
-        }
-    }
-    
-    // v1.9 Refactor helper
-    private func handleNewTrackDetected(track: MusicTrack, trackHash: String) {
             // Smart Album Continuity
             // If we are on the same album and have a confirmed rate, we trust it persists.
             let isSameAlbum = (isSystemInitializing == false) && (previousAlbum != nil) && (track.album == previousAlbum)
@@ -266,23 +181,9 @@ public class SwitcherService: LogParserDelegate {
             previousAlbum = track.album // Update for next time
             isSwitchOperationApplied = false
             
-            // v1.4: Record Sync Timestamp
-            // We use Date() - 0.5s to be safe against slight clock diffs, but mostly to mark "Now"
-            lastTrackChangeTime = Date()
-            
             // Default behavior: Reset stability
             candidateRate = nil
             candidateRateStartTime = nil
-            // v2.3 Fix: Preserving Stream Rate
-            // We do NOT clear detectedStreamRate here.
-            // Since v2.0 "Dual-Trigger", the log (Rate Change) often arrives BEFORE this method (Track Change).
-            // If we clear it, we wipe the fresh valid rate we just saw, causing a fallback error.
-            // detectedStreamRate = nil
-            
-            // v2.3: Force Last Change Time update to ensure we accept the log
-            // We subtract 0.5s to ensure the log timestamp (which might be milliseconds ago) is accepted.
-            lastTrackChangeTime = Date().addingTimeInterval(-0.5)
-            
             setPollInterval(transitionPollInterval)
             pendingSwitchTimer?.invalidate()
             pendingSwitchTimer = nil
@@ -319,6 +220,7 @@ public class SwitcherService: LogParserDelegate {
                 }
             }
         }
+    }
     
     private func waitForStableRate(track: MusicTrack) {
         // Reset stability state effectively for new track
@@ -342,17 +244,32 @@ public class SwitcherService: LogParserDelegate {
             // let currentLogRate = self.latestLogRate
             // print("checking stability... current log: \(currentLogRate ?? 0)")
             
+            // Determine Current Device Rate for Fast Path
+            var currentDeviceRate: Double?
+            if let userID = self.selectedDeviceID {
+                currentDeviceRate = self.deviceManager.getDeviceInfo(userID)?.sampleRate
+            } else {
+                currentDeviceRate = self.deviceManager.getDefaultOutputDevice()?.sampleRate
+            }
+            
             // Dynamic Stability Duration
-            // v1.4: Timestamp Sync allows us to be FAST again (0.5s)
-            // We know the log is "fresh" because of didDetectSampleRate filtering.
-            let requiredDuration: TimeInterval = 0.5
+            // If the logs match the CURRENT device rate (same rate), we can trust it faster (0.5s).
+            // If the logs show a NEW rate, we must be strict (2.0s) to avoid glitches/lag.
+            let requiredDuration: TimeInterval
+            if let devRate = currentDeviceRate, let logRate = self.candidateRate,
+               abs(devRate - logRate) < 0.1 {
+                requiredDuration = 0.5 // Fast Path: Same rate, just confirm briefly
+            } else {
+                requiredDuration = 2.0 // Slow Path: Changing rate, be strict
+            }
             
             // Check stability
             if let startTime = self.candidateRateStartTime,
                let rate = self.candidateRate,
                Date().timeIntervalSince(startTime) >= requiredDuration {
                 
-                print("✅ Verified stable rate: \(rate)Hz (held for >\(requiredDuration)s) - switching now")
+                let pathName = requiredDuration < 1.0 ? "FAST" : "STRICT"
+                print("✅ Verified stable rate (\(pathName)): \(rate)Hz (held for >\(requiredDuration)s) - switching now")
                 timer.invalidate()
                 self.performDelayedSwitch(for: track)
                 return
@@ -471,8 +388,6 @@ public class SwitcherService: LogParserDelegate {
         }
         
         // Priority 3: Fallback for streams (CD quality)
-        // If we just cleared it, this returns 44.1 temporarily until logs catch up.
-        // This is safer than sticking to the old rate (e.g. 192k) which might be wrong.
         return (44100.0, nil)
     }
     

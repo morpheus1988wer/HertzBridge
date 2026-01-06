@@ -1,0 +1,8 @@
+.DS_Store
+.build/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+dist/
+*.dmg
+*.zip

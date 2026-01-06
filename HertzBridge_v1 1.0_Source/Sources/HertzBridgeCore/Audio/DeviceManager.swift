@@ -102,21 +102,16 @@ public class DeviceManager {
     }
     
     public func getDeviceInfo(_ deviceID: AudioDeviceID) -> AudioDeviceInfo? {
-        var propertySize = UInt32(MemoryLayout<CFString?>.size)
+        var deviceName = "" as CFString
+        var propertySize = UInt32(MemoryLayout<CFString>.size)
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyDeviceNameCFString,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
         
-        var nameRef: CFString? = nil
-        var err = noErr
-        withUnsafeMutablePointer(to: &nameRef) { namePtr in
-             err = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, namePtr)
-        }
+        var err = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, &deviceName)
         if err != noErr { return nil }
-        
-        let deviceName = (nameRef as String?) ?? "Unknown Device"
         
         var nominalSampleRate = Float64(0)
         propertySize = UInt32(MemoryLayout<Float64>.size)

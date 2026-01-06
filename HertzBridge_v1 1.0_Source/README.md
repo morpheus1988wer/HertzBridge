@@ -19,7 +19,7 @@ Built on the technical foundations of projects like Vincent Neo's *LosslessSwitc
 
 ## 🛠️ Installation & Usage
 
-1.  Download the latest [HertzBridge_v2.4.dmg](HertzBridge_v2.4.dmg).
+1.  Download the latest [HertzBridge_v1.0.dmg](HertzBridge_v1.0.dmg).
 2.  Drag to Applications.
 3.  Open HertzBridge. It will appear in your Menu Bar.
 4.  Optionally, enable **Launch at Login** from the menu.

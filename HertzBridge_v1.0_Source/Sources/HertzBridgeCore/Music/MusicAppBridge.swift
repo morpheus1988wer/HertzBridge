@@ -35,18 +35,22 @@ public class MusicAppBridge {
             return nil
         }
         
-        return parseRobustOutput(output)
+        let track = parseRobustOutput(output)
+        if let track = track {
+            // print("MusicAppBridge: Detected track '\(track.name)' by \(track.artist)")
+        }
+        return track
     }
     
     private func runScript() -> String? {
         // Prevent launching Music app if it's not running
         let musicApps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music")
         if musicApps.isEmpty {
+            // print("MusicAppBridge: Music app not running, skipping script")
             return nil
         }
     
-        // v1.9: Use Native NSAppleScript for speed (avoids process launch overhead)
-        let fetchTrackMetadataScript = """
+        let robustScript = """
         tell application "Music"
             if player state is playing then
                 try
@@ -68,19 +72,26 @@ public class MusicAppBridge {
         end tell
         """
         
-        var error: NSDictionary?
-        if let scriptObject = NSAppleScript(source: fetchTrackMetadataScript) {
-            let outputDescriptor = scriptObject.executeAndReturnError(&error)
-            if let err = error {
-                print("MusicAppBridge: NSAppleScript Error: \(err)")
-                return nil
-            }
-            return outputDescriptor.stringValue
+        let process = Process()
+        process.launchPath = "/usr/bin/osascript"
+        process.arguments = ["-e", robustScript]
+        
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        
+        do {
+            try process.run()
+        } catch {
+            return nil
         }
-        return nil
+        
+        process.waitUntilExit()
+        
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
-    // Updated parser for the metadata script
+    // Updated parser for the robust script
     private func parseRobustOutput(_ raw: String) -> MusicTrack? {
         let parts = raw.components(separatedBy: "|||")
         // Now expects 4 parts: Name, Artist, Album, Location

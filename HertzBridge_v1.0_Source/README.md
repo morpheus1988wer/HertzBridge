@@ -19,7 +19,7 @@ Built on the technical foundations of projects like Vincent Neo's *LosslessSwitc
 
 ## 🛠️ Installation & Usage
 
-1.  Download the latest [HertzBridge_v2.4.dmg](HertzBridge_v2.4.dmg).
+1.  Download the latest [HertzBridge.dmg](HertzBridge_v1.0.dmg).
 2.  Drag to Applications.
 3.  Open HertzBridge. It will appear in your Menu Bar.
 4.  Optionally, enable **Launch at Login** from the menu.
@@ -30,14 +30,6 @@ HertzBridge operates by:
 *   **Log Parsing**: Actively monitoring `com.apple.Music` system logs to extract real-time streaming metadata not exposed by standard APIs.
 *   **AppleScript Bridge**: Low-impact metadata fetching for Track/Artist/Album context.
 *   **CoreAudio (C-APIs)**: Direct hardware communication with your DAC to set the physical clock without resampling.
-
-## ✨ Vibe Coded
-
-HertzBridge is "vibe coded"—built with passion to solve a shared problem. I'll do my best to address improvements and fix errors as they arise, but please keep in mind this is a community project maintained in spare time.
-
-## ⚠️ Disclaimer
-
-**Use at your own risk.** Usage of this application does not make the developer liable for any damage caused to your DAC, Mac, or any other hardware. By using this software, you agree that you are solely responsible for its impact on your system.
 
 ## 🤝 Credits
 

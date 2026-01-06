@@ -1,7 +1,7 @@
 import Foundation
 
 public protocol LogParserDelegate: AnyObject {
-    func didDetectSampleRate(_ rate: Double, at timestamp: Date)
+    func didDetectSampleRate(_ rate: Double)
 }
 
 public class LogParser {
@@ -69,28 +69,15 @@ public class LogParser {
 
     private func processLine(_ line: String) {
         // Simple approach: just look for standard sample rate numbers in the line
+        // This is what the old working version did
         for rateStr in ratePatterns {
             if line.contains(rateStr) {
                 if let rate = Double(rateStr) {
-                    // v1.4: Attempt to extract timestamp
-                    let timestamp = extractTimestamp(from: line) ?? Date()
-                    delegate?.didDetectSampleRate(rate, at: timestamp)
+                    // print("LogParser: Detected \(rate)Hz from logs")
+                    delegate?.didDetectSampleRate(rate)
                     return
                 }
             }
         }
-    }
-    
-    // v1.4: Basic timestamp parser for default `log stream` format
-    // Format: "2024-01-06 18:57:10.123456+0100 ..."
-    private func extractTimestamp(from line: String) -> Date? {
-        let components = line.components(separatedBy: " ")
-        if components.count >= 2 {
-            let dateStr = components[0] + " " + components[1]
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSSSSSZ"
-            return formatter.date(from: dateStr)
-        }
-        return nil
     }
 }
