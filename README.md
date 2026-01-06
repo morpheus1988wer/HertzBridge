@@ -17,6 +17,20 @@ Built on the technical foundations of projects like Vincent Neo's *LosslessSwitc
 *   **Zero-Interference**: Intelligently pre-checks if the Music app is running before querying, ensuring it never accidentally launches the player on startup.
 *   **Minimalist UI**: Ultra-compact menu bar item with variable-width display (e.g., "44k", "192k") to minimize clutter.
 
+## 🚀 Release Notes: v1.1 (Stable Release)
+
+This version is a complete engine rewrite focusing on zero latency and native performance.
+
+### ⚡️ Engine & Performance
+*   **Native Engine**: Replaced slow shell polling with a native in-memory system. Checks are now instant with negligible CPU usage.
+*   **Dual-Trigger System**: The app wakes up *immediately* when the audio device reports a sample rate change, bypassing slow Music.app notifications.
+*   **Instant Feedback**: The menu bar updates instantly ("Detecting... 96kHz") to eliminate perceived lag.
+
+### 🛠️ Fixes & Polish
+*   **Persistence Fix**: Resolved a race condition ensuring correct rates are applied even during rapid track skipping.
+*   **Memory Safety**: Fixed all compiler warnings for rock-solid stability.
+*   **Icon Restored**: Includes the restored, premium app icon.
+
 ## 🛠️ Installation & Usage
 
 1.  Download the latest [HertzBridge_v2.4.dmg](HertzBridge_v2.4.dmg).
