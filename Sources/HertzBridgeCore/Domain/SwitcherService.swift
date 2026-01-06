@@ -248,11 +248,23 @@ public class SwitcherService: LogParserDelegate {
         // Create unique hash for this track
         let trackHash = "\(track.name)|\(track.artist)"
         
-        // Check if track changed
+        // Check if track changed OR if we have a pending rate change to process
+        // v1.2 Fix: "Detecting..." Loop
+        // We must process even if trackHash is same, if 'candidateRate' is set (meaning logs saw a change).
         if trackHash != trackIdentityHash {
-             // ... Logic continues below (reusing existing flow) ...
-             // We need to implement the rest of the original function logic here
+             // Track changed: Reset everything
              self.handleNewTrackDetected(track: track, trackHash: trackHash)
+        } else if candidateRate != nil && pendingSwitchTimer == nil {
+             // Same track, but we have a candidate rate AND we aren't already monitoring it.
+             // If pendingSwitchTimer is NOT nil, it means waitForStableRate is already running (or a switch is pending),
+             // so we let that timer do its job instead of rebooting it.
+             self.handleNewTrackDetected(track: track, trackHash: trackHash)
+        } else {
+             // Track stable, or already detecting.
+             // Ensure UI is ostensibly correct (clears any stale "Detecting" if it persisted erroneously)
+             if pendingSwitchTimer == nil {
+                 updateUIForTrack(track, beforeSwitch: false)
+             }
         }
     }
     
@@ -423,6 +435,12 @@ public class SwitcherService: LogParserDelegate {
              
             setPollInterval(playbackPollInterval)
         }
+        
+        // v1.2 Fix: Cleanup Candidate Rate
+        // Once the switch is performed (or deemed unnecessary), we must clear the candidate rate
+        // so that the polling loop doesn't think there's a "pending" change and restart detection.
+        candidateRate = nil
+        candidateRateStartTime = nil
     }
     
     private func updateUIForTrack(_ track: MusicTrack, beforeSwitch: Bool) {

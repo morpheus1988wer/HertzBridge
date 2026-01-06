@@ -27,13 +27,23 @@ This version is a complete engine rewrite focusing on zero latency and native pe
 
 
 ### 🛠️ Fixes & Polish
+*  ### v1.2
+- **Fixed:** Resolved an issue where the app would get stuck in a "Detecting..." loop.
+- **Fixed:** Improved stability timer logic to prevent resets while already monitoring.
+- **Improved:** Rate detection now explicitly clears pending flags after successful switch.
+- **Improved:** Optimized log polling to avoid redundant processing.
+
+### v1.1
+- **Fixed:** "Unresponsiveness" / Latency issues. Now uses aggressive pre-polling and Dual-Trigger system.
+- **Fixed:** `AppleScript` execution moved to background thread (Native API) to prevent UI freezing.
+- **Improved:** Immediate "Detecting..." UI feedback.
 *   **Persistence Fix**: Resolved a race condition ensuring correct rates are applied even during rapid track skipping.
 *   **Memory Safety**: Fixed all compiler warnings for rock-solid stability.
 *   **Icon Restored**: Includes the restored, premium app icon.
 
 ## 🛠️ Installation & Usage
 
-1.  Download the latest [HertzBridge_v1.1.dmg](HertzBridge_v1.1.dmg).
+1.  Download the latest [HertzBridge v1.2](HertzBridge_v1.2.dmg).
 2.  Drag to Applications.
 3.  Open HertzBridge. It will appear in your Menu Bar.
 4.  Optionally, enable **Launch at Login** from the menu.

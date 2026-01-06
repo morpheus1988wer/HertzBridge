@@ -40,7 +40,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         statusMenu.delegate = self // To refresh device list on open
         
         // BRANDING HEADER
-        let headerItem = NSMenuItem(title: "HertzBridge v1.1", action: nil, keyEquivalent: "")
+        let headerItem = NSMenuItem(title: "HertzBridge v1.2", action: nil, keyEquivalent: "")
         headerItem.isEnabled = false
         statusMenu.addItem(headerItem)
         statusMenu.addItem(NSMenuItem.separator())

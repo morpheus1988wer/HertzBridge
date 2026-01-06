@@ -6,3 +6,7 @@ xcuserdata/
 dist/
 *.dmg
 *.zip
+Backups/
+
+
+DevVersions/
