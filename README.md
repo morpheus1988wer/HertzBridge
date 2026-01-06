@@ -4,68 +4,54 @@
 
 HertzBridge is a lightweight menu bar utility that automatically synchronizes your DAC's sample rate with the track currently playing in the macOS Music app (including Apple Music and local files). 
 
-Built on the technical foundations of projects like Vincent Neo's *LosslessSwitcher*, HertzBridge is a modern evolution focused on high-reliability switching and a seamless, "set and forget" user experience.
+## 🚀 Latest Version: v1.2 (Stable)
 
-## ✨ Key Features
+This version is the most stable and reliable iteration of HertzBridge, featuring a completely rewritten engine for zero-latency detection and rock-solid state management.
 
-*   **Tenacious Switching Engine**: Robust retry logic that iterates through all compatible bit depths (32-bit > 24-bit > 16-bit) if a hardware driver rejects the initial request.
-*   **Smart Album Continuity**: Detects when you are playing an album. Once the rate is confirmed for the first track, subsequent tracks in the same album switch **instantly**, preserving gapless playback.
-*   **Persistent Device Display**: The menu bar always reflects your DAC's actual physical sample rate, even when Apple Music is closed or if you manually change settings in Audio MIDI Setup.
-*   **Dual-Path Stability**: 
-    *   **Fast Path**: Near-instant approval if the new track matches the current hardware rate.
-    *   **Safe Path**: Strict stability verification for actual rate changes to ensure zero audio glitches.
-*   **Zero-Interference**: Intelligently pre-checks if the Music app is running before querying, ensuring it never accidentally launches the player on startup.
-*   **Minimalist UI**: Ultra-compact menu bar item with variable-width display (e.g., "44k", "192k") to minimize clutter.
+### [Download HertzBridge v1.2 (DMG)](HertzBridge_v1.2.dmg)
 
-## 🚀 Release Notes: v1.1 (Stable Release)
+### Key Improvements in v1.2:
+- **Zero-Loop Logic**: Resolved the "Detecting..." infinite loop caused by polling race conditions.
+- **Enhanced Stability**: Refined the stability timer to prevent resets during active monitoring.
+- **State Cleanup**: Improved rate detection to explicitly clear internal flags after a successful switch.
+- **Branding Sync**: Properly reflected versioning in the menu bar and application metadata.
 
-This version is a complete engine rewrite focusing on zero latency and native performance.
+---
 
-### ⚡️ Engine & Performance
-*   **Native Engine**: Replaced slow shell polling with a native in-memory system. Checks are now instant with negligible CPU usage.
-*   **Dual-Trigger System**: The app wakes up *immediately* when the audio device reports a sample rate change, bypassing slow Music.app notifications.
+## ✨ Features
 
+*   **Tenacious Switching Engine**: Robust retry logic that iterates through compatible bit depths (32-bit > 24-bit > 16-bit) to ensure hardware compatibility.
+*   **Smart Album Continuity**: Instant switching for subsequent tracks in the same album, preserving gapless playback once the initial rate is confirmed.
+*   **Persistent Device Display**: The menu bar reflects your DAC's *actual* physical sample rate, providing real-time verification of bit-perfect playback.
+*   **Dual-Trigger System**: The app wakes up immediately on hardware rate changes, bypassing latent notifications for a snappier experience.
+*   **Native Engine**: Built for performance with a native in-process system that uses negligible CPU.
+*   **Zero-Interference**: Intelligently manages connection state so it never accidentally launches the Music app on startup.
 
-### 🛠️ Fixes & Polish
-*  ### v1.2
-- **Fixed:** Resolved an issue where the app would get stuck in a "Detecting..." loop.
-- **Fixed:** Improved stability timer logic to prevent resets while already monitoring.
-- **Improved:** Rate detection now explicitly clears pending flags after successful switch.
-- **Improved:** Optimized log polling to avoid redundant processing.
+## 🛠️ Evolution from v1.1
+HertzBridge v1.2 inherits all the major performance breakthroughs of v1.1:
+- Replaced shell-based polling with **native AppleScript hooks** (NSAppleScript).
+- Moved expensive operations to **background threads** to keep the UI perfectly fluid.
+- Implemented **Distributed Notifications** for instant track detection.
 
-### v1.1
-- **Fixed:** "Unresponsiveness" / Latency issues. Now uses aggressive pre-polling and Dual-Trigger system.
-- **Fixed:** `AppleScript` execution moved to background thread (Native API) to prevent UI freezing.
-- **Improved:** Immediate "Detecting..." UI feedback.
-*   **Persistence Fix**: Resolved a race condition ensuring correct rates are applied even during rapid track skipping.
-*   **Memory Safety**: Fixed all compiler warnings for rock-solid stability.
-*   **Icon Restored**: Includes the restored, premium app icon.
-
-## 🛠️ Installation & Usage
+## 🔧 Installation & Usage
 
 1.  Download the latest [HertzBridge v1.2](HertzBridge_v1.2.dmg).
-2.  Drag to Applications.
-3.  Open HertzBridge. It will appear in your Menu Bar.
+2.  Drag to **Applications**.
+3.  Open HertzBridge from your Applications folder.
 4.  Optionally, enable **Launch at Login** from the menu.
 
 ## 🧠 Technical Overview
 
 HertzBridge operates by:
-*   **Log Parsing**: Actively monitoring `com.apple.Music` system logs to extract real-time streaming metadata not exposed by standard APIs.
-*   **AppleScript Bridge**: Low-impact metadata fetching for Track/Artist/Album context.
-*   **CoreAudio (C-APIs)**: Direct hardware communication with your DAC to set the physical clock without resampling.
+*   **Log Parsing**: Monitoring `com.apple.Music` system logs for real-time streaming metadata.
+*   **Native Bridge**: Low-impact metadata fetching via in-process AppleScript.
+*   **CoreAudio (C-APIs)**: Direct hardware communication to set the physical clock without resampling.
 
-## ✨ Vibe Coded
+---
 
-HertzBridge is "vibe coded"—built with passion to solve a shared problem. I'll do my best to address improvements and fix errors as they arise, but please keep in mind this is a community project maintained in spare time.
+## ✨ Credits & Acknowledgements
 
-## ⚠️ Disclaimer
-
-**Use at your own risk.** Usage of this application does not make the developer liable for any damage caused to your DAC, Mac, or any other hardware. By using this software, you agree that you are solely responsible for its impact on your system.
-
-## 🤝 Credits
-
-HertzBridge is a technical evolution of concepts pioneered by the community. Special thanks to [Vincent Neo](https://github.com/vincentneo) for the foundational research into log-based rate detection on macOS.
+HertzBridge is a technical evolution of concepts pioneered by the community. Special thanks to [Vincent Neo](https://github.com/vincentneo) for foundational research into log-based rate detection on macOS.
 
 ---
 *Created with 💙 for the Hi-Fi community.*
