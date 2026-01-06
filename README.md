@@ -24,7 +24,7 @@ This version is a complete engine rewrite focusing on zero latency and native pe
 ### ⚡️ Engine & Performance
 *   **Native Engine**: Replaced slow shell polling with a native in-memory system. Checks are now instant with negligible CPU usage.
 *   **Dual-Trigger System**: The app wakes up *immediately* when the audio device reports a sample rate change, bypassing slow Music.app notifications.
-*   **Instant Feedback**: The menu bar updates instantly ("Detecting... 96kHz") to eliminate perceived lag.
+
 
 ### 🛠️ Fixes & Polish
 *   **Persistence Fix**: Resolved a race condition ensuring correct rates are applied even during rapid track skipping.
