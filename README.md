@@ -4,41 +4,50 @@
 
 HertzBridge is a lightweight menu bar utility that automatically synchronizes your DAC's sample rate with the track currently playing in the macOS Music app (including Apple Music and local files). 
 
-## 🚀 Latest Version: v1.2 (Stable)
+## 🚀 Latest Version: v1.3 (Stable)
 
-This version is the most stable and reliable iteration of HertzBridge, featuring a completely rewritten engine for zero-latency detection and rock-solid state management.
+This version features comprehensive improvements to rate detection, UI responsiveness, and Music app termination handling.
 
-### [Download HertzBridge v1.2 (DMG)](HertzBridge_v1.2.dmg)
+### [Download HertzBridge v1.3 (DMG)](HertzBridge_v1.3.dmg)
 
-### Key Improvements in v1.2:
-- **Zero-Loop Logic**: Resolved the "Detecting..." infinite loop caused by polling race conditions.
-- **Enhanced Stability**: Refined the stability timer to prevent resets during active monitoring.
-- **State Cleanup**: Improved rate detection to explicitly clear internal flags after a successful switch.
-- **Branding Sync**: Properly reflected versioning in the menu bar and application metadata.
+### Key Improvements in v1.3:
+- **AppleScript Rate Detection**: Direct sample rate fetching bypasses log permission restrictions for instant, reliable detection.
+- **Zero UI Flicker**: Eliminated "Detecting..." flashes by prioritizing AppleScript rates over log-based detection.
+- **Boot Loop Fix**: Comprehensive 5-layer protection prevents Music from relaunching when quit during playback.
+- **Enhanced Permissions**: Added `NSAppleEventsUsageDescription` for proper macOS automation access.
 
 ---
 
-## ✨ Features
+## 📦 Installation
 
-*   **Tenacious Switching Engine**: Robust retry logic that iterates through compatible bit depths (32-bit > 24-bit > 16-bit) to ensure hardware compatibility.
-*   **Smart Album Continuity**: Instant switching for subsequent tracks in the same album, preserving gapless playback once the initial rate is confirmed.
-*   **Persistent Device Display**: The menu bar reflects your DAC's *actual* physical sample rate, providing real-time verification of bit-perfect playback.
-*   **Dual-Trigger System**: The app wakes up immediately on hardware rate changes, bypassing latent notifications for a snappier experience.
-*   **Native Engine**: Built for performance with a native in-process system that uses negligible CPU.
-*   **Zero-Interference**: Intelligently manages connection state so it never accidentally launches the Music app on startup.
+1. Download the latest [HertzBridge v1.3 DMG](HertzBridge_v1.3.dmg).
+2. Open the DMG and drag **HertzBridge.app** to your **Applications** folder.
+3. **Important:** Since this app is not signed with an Apple Developer certificate, macOS will block it on first launch.
 
-## 🛠️ Evolution from v1.1
-HertzBridge v1.2 inherits all the major performance breakthroughs of v1.1:
-- Replaced shell-based polling with **native AppleScript hooks** (NSAppleScript).
-- Moved expensive operations to **background threads** to keep the UI perfectly fluid.
-- Implemented **Distributed Notifications** for instant track detection.
+### Bypassing macOS Gatekeeper (Required for first launch):
 
-## 🔧 Installation & Usage
+**Option 1: Right-Click Method (Easiest)**
+1. Go to **Applications** folder
+2. **Right-click** (or Control-click) on **HertzBridge.app**
+3. Select **"Open"** from the menu
+4. Click **"Open"** in the security dialog
+5. The app will now run normally on future launches
 
-1.  Download the latest [HertzBridge v1.2](HertzBridge_v1.2.dmg).
-2.  Drag to **Applications**.
-3.  Open HertzBridge from your Applications folder.
-4.  Optionally, enable **Launch at Login** from the menu.
+**Option 2: Terminal Command (Alternative)**
+```bash
+xattr -cr /Applications/HertzBridge.app
+```
+Then launch HertzBridge normally from Applications.
+
+**Option 3: System Settings (If already blocked)**
+1. Go to **System Settings** → **Privacy & Security**
+2. Scroll down to the **Security** section
+3. Click **"Open Anyway"** next to the HertzBridge message
+4. Confirm by clicking **"Open"**
+
+### Optional: Launch at Login
+Once HertzBridge is running, you can enable **Launch at Login** from the menu bar icon.
+
 
 ## 🧠 Technical Overview
 

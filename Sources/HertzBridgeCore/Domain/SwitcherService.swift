@@ -5,7 +5,7 @@ public protocol SwitcherServiceDelegate: AnyObject {
     func didUpdateStatus(track: String, trackFormat: String, device: String, deviceFormat: String)
 }
 
-public class SwitcherService: LogParserDelegate {
+public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
     public static let shared = SwitcherService()
     
     private var isRunning = false
@@ -56,6 +56,7 @@ public class SwitcherService: LogParserDelegate {
     
     private init() {
         logParser.delegate = self
+        musicBridge.delegate = self // v1.3: Boot Loop Fix
         
         // Register for Music app notifications
         // Note: Music.app still broadcasts as 'com.apple.iTunes' for backward compatibility
@@ -153,20 +154,24 @@ public class SwitcherService: LogParserDelegate {
             candidateRate = rate
             candidateRateStartTime = Date()
             
-            // v2.1: Immediate Feedback
-            // Update UI instantly to show we found a candidate rate ("Detecting...")
-            // This prevents the "dead" feeling while waiting for stability.
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            let rateStr = formatter.string(from: NSNumber(value: rate)) ?? "\(rate)"
-            
-            if let currentDevice = deviceManager.getDeviceInfo(selectedDeviceID ?? deviceManager.getDefaultOutputDevice()?.id ?? 0) {
-                updateUI(
-                    status: "Detecting...", 
-                    trackFormat: "\(rateStr)Hz?", 
-                    deviceFormat: getDeviceFormatString(for: currentDevice.id),
-                    deviceName: currentDevice.name
-                )
+            // v1.3 Fix: Only show "Detecting..." if we're actually waiting for logs
+            // If the switch is already applied or pending, don't flash "Detecting..."
+            if !isSwitchOperationApplied && pendingSwitchTimer == nil {
+                // v2.1: Immediate Feedback
+                // Update UI instantly to show we found a candidate rate ("Detecting...")
+                // This prevents the "dead" feeling while waiting for stability.
+                let formatter = NumberFormatter()
+                formatter.numberStyle = .decimal
+                let rateStr = formatter.string(from: NSNumber(value: rate)) ?? "\(rate)"
+                
+                if let currentDevice = deviceManager.getDeviceInfo(selectedDeviceID ?? deviceManager.getDefaultOutputDevice()?.id ?? 0) {
+                    updateUI(
+                        status: "Detecting...", 
+                        trackFormat: "\(rateStr)Hz?", 
+                        deviceFormat: getDeviceFormatString(for: currentDevice.id),
+                        deviceName: currentDevice.name
+                    )
+                }
             }
         }
     }
@@ -312,8 +317,17 @@ public class SwitcherService: LogParserDelegate {
             } else {
                 // STREAMING LOGIC
                 
-                // Check for Same-Album "Instant Path"
-                if isSameAlbum, let expectedRate = confirmedAlbumRate {
+                // v1.3: Priority Check - AppleScript Rate Available?
+                if let scriptRate = track.sampleRate, scriptRate > 0 {
+                    print("🎵 AppleScript provided rate: \(scriptRate)Hz - switching immediately")
+                    // Use AppleScript rate directly, no need to wait for logs
+                    detectedStreamRate = scriptRate
+                    
+                    // Instant Switch (0.1s to allow UI breath)
+                    pendingSwitchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
+                         self?.performDelayedSwitch(for: track)
+                    }
+                } else if isSameAlbum, let expectedRate = confirmedAlbumRate {
                     print("💿 Same Album ('\(track.album ?? "-")') detected. Preserving \(expectedRate)Hz.")
                     // Manually set the 'detectedStreamRate' to what we expect, so determineFormat picks it up
                     detectedStreamRate = expectedRate
@@ -323,8 +337,8 @@ public class SwitcherService: LogParserDelegate {
                          self?.performDelayedSwitch(for: track)
                     }
                 } else {
-                    // Normal Path (Fast or Slow Stability Check)
-                    print("🌐 Streaming track detected: Waiting for stability...")
+                    // Fallback: Log-based detection (for old behavior compatibility)
+                    print("🌐 Streaming track detected: Waiting for log-based stability...")
                     // Reset album rate confirmation until this new track is stable
                     confirmedAlbumRate = nil 
                     waitForStableRate(track: track)
@@ -483,6 +497,12 @@ public class SwitcherService: LogParserDelegate {
             }
         }
         
+        // Priority 1.5: Direct AppleScript Rate (v1.3 Fix for Local Builds)
+        // If AppleScript gave us a valid rate, use it! It's much more reliable than logs for ad-hoc builds.
+        if let scriptRate = track.sampleRate, scriptRate > 0 {
+             return (scriptRate, nil)
+        }
+        
         // Priority 2: Streaming - use log-detected rate if available
         if let logRate = detectedStreamRate {
             return (logRate, nil) // nil = ignore bit depth for streams
@@ -519,5 +539,19 @@ public class SwitcherService: LogParserDelegate {
         lastReportedDeviceName = devName
         
         delegate?.didUpdateStatus(track: status, trackFormat: trackFormat, device: devName, deviceFormat: deviceFormat)
+    }
+    
+    // MARK: - MusicAppBridgeDelegate
+    public func musicAppDidTerminate() {
+        print("SwitcherService: Music terminated - halting all timers immediately")
+        // Immediately stop all timers to prevent any queries during shutdown
+        pollTimer?.invalidate()
+        pollTimer = nil
+        pendingSwitchTimer?.invalidate()
+        pendingSwitchTimer = nil
+        
+        // Reset state
+        trackIdentityHash = ""
+        isSwitchOperationApplied = false
     }
 }
