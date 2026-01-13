@@ -58,6 +58,23 @@ HertzBridge operates by:
 
 ---
 
+## 📜 Version History
+
+### v1.2 (Stable)
+- **Zero-Loop Logic**: Resolved the "Detecting..." infinite loop.
+- **Enhanced Stability**: Refined stability timers and state cleanup.
+- **Features Introduced**:
+    - **Tenacious Switching Engine**: Retry logic (32 > 24 > 16 bit).
+    - **Smart Album Continuity**: Instant switching for same-album tracks.
+    - **Dual-Trigger System**: Immediate wakeup on hardware rate changes.
+
+### v1.1 (Evolution)
+- Replaced shell-based polling with **native AppleScript hooks** (NSAppleScript).
+- Moved expensive operations to **background threads**.
+- Implemented **Distributed Notifications** for instant track detection.
+
+---
+
 ## ✨ Credits & Acknowledgements
 
 HertzBridge is a technical evolution of concepts pioneered by the community. Special thanks to [Vincent Neo](https://github.com/vincentneo) for foundational research into log-based rate detection on macOS.
