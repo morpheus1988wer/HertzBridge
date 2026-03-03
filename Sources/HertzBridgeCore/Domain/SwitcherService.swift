@@ -331,41 +331,30 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
                 }
             } else {
                 // STREAMING LOGIC
+                // Note: AppleScript's sampleRate is NOT used here because Apple Music
+                // always returns 44100 for streams regardless of actual Hi-Res quality.
+                // We rely on log-detected rates and album continuity instead.
                 
                 if self.manualOverrideRate != nil {
                     print("⚙️ Manual override active (\(self.manualOverrideRate!)Hz) - switching immediately")
-                    // Instant Switch (0.1s to allow UI breath)
-                    pendingSwitchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
-                         self?.performDelayedSwitch(for: track)
-                    }
-                } else if let scriptRate = track.sampleRate, scriptRate > 0 {
-                    print("🎵 AppleScript provided rate: \(scriptRate)Hz - switching immediately")
-                    // Use AppleScript rate directly, no need to wait for logs
-                    detectedStreamRate = scriptRate
-                    
-                    // Instant Switch (0.1s to allow UI breath)
                     pendingSwitchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
                          self?.performDelayedSwitch(for: track)
                     }
                 } else if isSameAlbum, let expectedRate = confirmedAlbumRate {
                     print("💿 Same Album ('\(track.album ?? "-")') detected. Preserving \(expectedRate)Hz.")
-                    // Manually set the 'detectedStreamRate' to what we expect, so determineFormat picks it up
                     detectedStreamRate = expectedRate
                     
-                    // Instant Switch (0.1s to allow UI breath)
                     pendingSwitchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
                          self?.performDelayedSwitch(for: track)
                     }
                 } else if let knownRate = self.detectedStreamRate {
-                    print("♻️ Resuming known auto-detected rate: \(knownRate)Hz")
-                    // If we're swapping out of manual override mid-stream, we already know the target rate
+                    print("♻️ Using existing log-detected rate: \(knownRate)Hz")
                     pendingSwitchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
                          self?.performDelayedSwitch(for: track)
                     }
                 } else {
-                    // Fallback: Log-based detection (for old behavior compatibility)
+                    // No rate known yet: wait for log-based detection
                     print("🌐 Streaming track detected: Waiting for log-based stability...")
-                    // Reset album rate confirmation until this new track is stable
                     confirmedAlbumRate = nil 
                     waitForStableRate(track: track)
                 }
@@ -543,23 +532,27 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
         // Priority 1: Local file metadata (both rate + depth + codec)
         if let location = track.location {
             if let format = fileParser.getAudioFormat(path: location) {
-                // Local files: use actual bit depth if available
                 let depth = format.bitDepth ?? 16
                 return (format.sampleRate, depth, format.codec)
             }
+            
+            // Fallback for local files where FileParser failed: use AppleScript rate
+            if let scriptRate = track.sampleRate, scriptRate > 0 {
+                return (scriptRate, nil, nil)
+            }
         }
         
-        // Priority 1.5: Direct AppleScript Rate (v1.3 Fix for Local Builds)
-        if let scriptRate = track.sampleRate, scriptRate > 0 {
-             return (scriptRate, nil, nil)
-        }
-        
-        // Priority 2: Streaming - use log-detected rate if available
+        // Priority 2: Streaming - use log-detected rate (AppleScript always lies with 44100 for streams)
         if let logRate = detectedStreamRate {
             return (logRate, nil, nil)
         }
         
-        // Priority 3: Fallback for streams
+        // Priority 3: Fallback — AppleScript rate for streams only if no log data yet
+        if let scriptRate = track.sampleRate, scriptRate > 0 {
+            return (scriptRate, nil, nil)
+        }
+        
+        // Priority 4: Absolute fallback
         return (44100.0, nil, nil)
     }
     
