@@ -44,6 +44,18 @@ public class MusicAppBridge {
              isMusicTerminating = true  // Set flag IMMEDIATELY to block in-flight queries
              terminationCooldown = Date().addingTimeInterval(5.0)
              delegate?.musicAppDidTerminate()
+             
+             // v1.4: Unconditional flag reset — prevents permanent stuck state
+             // Previously, the flag only reset inside runScript(), which requires
+             // an active polling timer. If the timer was killed (by musicAppDidTerminate),
+             // the flag would never reset. This guarantees recovery.
+             DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) { [weak self] in
+                 guard let self = self else { return }
+                 if self.isMusicTerminating {
+                     print("MusicAppBridge: Safety reset — clearing termination flag after 6s")
+                     self.isMusicTerminating = false
+                 }
+             }
         }
     }
     
@@ -145,7 +157,17 @@ public class MusicAppBridge {
             if executionTime > 1.0 {
                 print("MusicAppBridge: AppleScript timeout (\(String(format: "%.2f", executionTime))s) - Music likely terminating")
                 terminationCooldown = Date().addingTimeInterval(10.0)
+                isMusicTerminating = true
                 delegate?.musicAppDidTerminate()
+                
+                // v1.4: Unconditional flag reset for timeout-triggered termination too
+                DispatchQueue.main.asyncAfter(deadline: .now() + 11.0) { [weak self] in
+                    guard let self = self else { return }
+                    if self.isMusicTerminating {
+                        print("MusicAppBridge: Safety reset — clearing timeout flag after 11s")
+                        self.isMusicTerminating = false
+                    }
+                }
                 return nil
             }
             

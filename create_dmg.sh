@@ -1,7 +1,7 @@
 #!/bin/bash
 
 APP_NAME="HertzBridge"
-VERSION="v1.3"
+VERSION="v1.4"
 DMG_NAME="${APP_NAME}_${VERSION}.dmg"
 BUILD_DIR=".build/release"
 APP_BUNDLE="${APP_NAME}.app"
@@ -47,7 +47,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.3</string>
+    <string>1.4</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSUIElement</key>

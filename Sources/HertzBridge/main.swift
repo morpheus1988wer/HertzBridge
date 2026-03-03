@@ -14,6 +14,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
     var deviceInfoItem: NSMenuItem!
     var deviceFormatItem: NSMenuItem!
     var deviceListSubmenu: NSMenu!
+    var overrideSubmenu: NSMenu!
+    
+    // Custom label references to bypass grey disabled text
+    var trackInfoLabel: NSTextField!
+    var trackFormatLabel: NSTextField!
+    var deviceInfoLabel: NSTextField!
+    var deviceFormatLabel: NSTextField!
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -40,23 +47,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         statusMenu.delegate = self // To refresh device list on open
         
         // BRANDING HEADER
-        let headerItem = NSMenuItem(title: "HertzBridge v1.3", action: nil, keyEquivalent: "")
-        headerItem.isEnabled = false
+        let headerItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        _ = setupInfoItem(headerItem, title: "HertzBridge v1.4", isHeader: true)
         statusMenu.addItem(headerItem)
         statusMenu.addItem(NSMenuItem.separator())
         
         // SECTION 1: INFO
-        trackInfoItem = NSMenuItem(title: "Track: Idle", action: nil, keyEquivalent: "")
-        trackFormatItem = NSMenuItem(title: "Format: -", action: nil, keyEquivalent: "")
-        trackFormatItem.indentationLevel = 1
+        trackInfoItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        trackFormatItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        trackInfoLabel = setupInfoItem(trackInfoItem, title: "Track: Idle")
+        trackFormatLabel = setupInfoItem(trackFormatItem, title: "-")
         
         statusMenu.addItem(trackInfoItem)
         statusMenu.addItem(trackFormatItem)
         statusMenu.addItem(NSMenuItem.separator())
         
-        deviceInfoItem = NSMenuItem(title: "Output: Default", action: nil, keyEquivalent: "")
-        deviceFormatItem = NSMenuItem(title: "Format: -", action: nil, keyEquivalent: "")
-        deviceFormatItem.indentationLevel = 1
+        deviceInfoItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        deviceFormatItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        deviceInfoLabel = setupInfoItem(deviceInfoItem, title: "Output: Default")
+        deviceFormatLabel = setupInfoItem(deviceFormatItem, title: "-")
         
         statusMenu.addItem(deviceInfoItem)
         statusMenu.addItem(deviceFormatItem)
@@ -72,7 +81,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         
         // SECTION: MANUAL CONTROL
         let overrideMenuItem = NSMenuItem(title: "Manual Sample Rate", action: nil, keyEquivalent: "")
-        let overrideSubmenu = NSMenu()
+        overrideSubmenu = NSMenu()
         
         let autoItem = NSMenuItem(title: "Auto-Detect", action: #selector(selectOverrideRate(_:)), keyEquivalent: "")
         autoItem.representedObject = nil
@@ -107,6 +116,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
     // Refresh Device List when menu opens
     func menuWillOpen(_ menu: NSMenu) {
         refreshDeviceList()
+        refreshOverrideList()
     }
     
     func refreshDeviceList() {
@@ -142,6 +152,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         refreshDeviceList()
     }
     
+    func refreshOverrideList() {
+        let activeRate = switcher.manualOverrideRate
+        for item in overrideSubmenu.items {
+            if item.isSeparatorItem { continue }
+            let itemRate = item.representedObject as? Double
+            item.state = (itemRate == activeRate) ? .on : .off
+        }
+    }
+    
     @objc func quit() {
         switcher.stop()
         NSApplication.shared.terminate(nil)
@@ -155,6 +174,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
             switcher.setManualOverride(rate: nil)
             print("User disabled manual override (auto-detect)")
         }
+        refreshOverrideList()
     }
     
     @objc func toggleAutostart(_ sender: NSMenuItem) {
@@ -186,13 +206,46 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         }
     }
     
+    // MARK: - Update UI
+    private func setupInfoItem(_ item: NSMenuItem, title: String, isHeader: Bool = false) -> NSTextField {
+        let label = NSTextField(labelWithString: title)
+        label.font = isHeader ? NSFont.systemFont(ofSize: 14, weight: .semibold) : NSFont.menuFont(ofSize: 14)
+        label.textColor = isHeader ? NSColor.secondaryLabelColor : NSColor.labelColor
+        label.isEditable = false
+        label.isSelectable = false
+        label.isBordered = false
+        label.backgroundColor = .clear
+        label.lineBreakMode = .byTruncatingTail
+        label.sizeToFit()
+        
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: label.frame.width + 37, height: 22))
+        label.frame = NSRect(x: 21, y: 2, width: label.frame.width + 5, height: 18)
+        view.addSubview(label)
+        
+        item.view = view
+        return label
+    }
+
     // SwitcherServiceDelegate
     func didUpdateStatus(track: String, trackFormat: String, device: String, deviceFormat: String) {
         DispatchQueue.main.async {
-            self.trackInfoItem.title = "Track: \(track)"
-            self.trackFormatItem.title = "Format: \(trackFormat)"
-            self.deviceInfoItem.title = "Output: \(device)"
-            self.deviceFormatItem.title = "Format: \(deviceFormat)"
+            self.trackInfoLabel.stringValue = "Track: \(track)"
+            self.trackFormatLabel.stringValue = "\(trackFormat)"
+            self.deviceInfoLabel.stringValue = "Output: \(device)"
+            self.deviceFormatLabel.stringValue = "\(deviceFormat)"
+            
+            // Dynamically resize custom NSViews to fit long strings natively
+            for label in [self.trackInfoLabel, self.trackFormatLabel, self.deviceInfoLabel, self.deviceFormatLabel] {
+                guard let label = label, let view = label.superview else { continue }
+                label.sizeToFit()
+                
+                // Set wide enough to hold the text + trailing padding
+                let newWidth = max(label.frame.width + 37, 240) 
+                
+                // Update parent menu item frame
+                view.frame = NSRect(x: 0, y: 0, width: newWidth, height: 22)
+                label.frame = NSRect(x: 21, y: 2, width: newWidth - 21, height: 18) // ensure label fills available space and truncates if impossibly long natively
+            }
             
             // Update menu bar (PLAIN TEXT)
             let components = deviceFormat.components(separatedBy: "Hz")

@@ -15,6 +15,7 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
     private let playbackPollInterval: TimeInterval = 3.0
     private let transitionPollInterval: TimeInterval = 0.51 // Fast polling during changes
     private var pollTimer: Timer?
+    private var selfCheckTimer: Timer?  // v1.4: Periodic health check
     private var trackIdentityHash: String = ""
     private var pendingSwitchTimer: Timer?
     private var isSwitchOperationApplied: Bool = false
@@ -29,6 +30,7 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
     
     // UI State tracking (to prevent redundant flashes)
     private var lastReportedTrackName: String?
+    private var lastReportedTrackFormat: String?
     private var lastReportedDeviceFormat: String?
     private var lastReportedDeviceName: String?
     
@@ -39,7 +41,17 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
     public func setManualOverride(rate: Double?) {
         manualOverrideRate = rate
         print("Manual override: \(rate.map { "\($0)Hz" } ?? "disabled")")
-        // Force immediate re-check to apply override
+        // v1.4 Fix: Reset state so the next poll treats this as a new track
+        // Previously, checkForTrackChange() saw the same track and skipped the switch
+        trackIdentityHash = ""
+        isSwitchOperationApplied = false
+        
+        // Reset candidate rate because track hash resets, but keep detectedStreamRate 
+        // intact so we know what rate to return to when auto-detect enables mid-song.
+        if rate == nil {
+            candidateRate = nil
+        }
+        
         checkForTrackChange()
     }
     
@@ -87,12 +99,15 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
         
         checkForTrackChange()
         setPollInterval(transitionPollInterval) // Start with fast polling
+        startSelfCheck() // v1.4: Periodic health monitoring
     }
     
     public func stop() {
         isRunning = false
         pollTimer?.invalidate()
         pollTimer = nil
+        selfCheckTimer?.invalidate()  // v1.4
+        selfCheckTimer = nil
         pendingSwitchTimer?.invalidate()
         logParser.stopMonitoring()
     }
@@ -317,8 +332,13 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
             } else {
                 // STREAMING LOGIC
                 
-                // v1.3: Priority Check - AppleScript Rate Available?
-                if let scriptRate = track.sampleRate, scriptRate > 0 {
+                if self.manualOverrideRate != nil {
+                    print("⚙️ Manual override active (\(self.manualOverrideRate!)Hz) - switching immediately")
+                    // Instant Switch (0.1s to allow UI breath)
+                    pendingSwitchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
+                         self?.performDelayedSwitch(for: track)
+                    }
+                } else if let scriptRate = track.sampleRate, scriptRate > 0 {
                     print("🎵 AppleScript provided rate: \(scriptRate)Hz - switching immediately")
                     // Use AppleScript rate directly, no need to wait for logs
                     detectedStreamRate = scriptRate
@@ -333,6 +353,12 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
                     detectedStreamRate = expectedRate
                     
                     // Instant Switch (0.1s to allow UI breath)
+                    pendingSwitchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
+                         self?.performDelayedSwitch(for: track)
+                    }
+                } else if let knownRate = self.detectedStreamRate {
+                    print("♻️ Resuming known auto-detected rate: \(knownRate)Hz")
+                    // If we're swapping out of manual override mid-stream, we already know the target rate
                     pendingSwitchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
                          self?.performDelayedSwitch(for: track)
                     }
@@ -458,11 +484,26 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
     }
     
     private func updateUIForTrack(_ track: MusicTrack, beforeSwitch: Bool) {
-        let (requiredRate, requiredDepth) = determineFormat(for: track)
-        let trackFormatStr = if let depth = requiredDepth {
-            "\(Int(requiredRate))Hz / \(depth)bit"
+        let (originalRate, originalDepth, originalCodec) = determineOriginalFormat(for: track)
+        
+        var trackFormatStr = ""
+        let hzString = "\(Int(originalRate))Hz"
+        
+        if let loc = track.location {
+            let codecDisplay = originalCodec ?? URL(fileURLWithPath: loc).pathExtension.uppercased()
+            let finalCodec = codecDisplay.isEmpty ? "local" : codecDisplay
+            
+            if let depth = originalDepth {
+                trackFormatStr = "\(hzString) / \(depth)bit / \(finalCodec)"
+            } else {
+                trackFormatStr = "\(hzString) / \(finalCodec)"
+            }
         } else {
-            "\(Int(requiredRate))Hz (stream)"
+            if let depth = originalDepth {
+                trackFormatStr = "\(hzString) / \(depth)bit / stream"
+            } else {
+                trackFormatStr = "\(hzString) / stream"
+            }
         }
         
         var targetDevice: AudioDeviceInfo?
@@ -474,10 +515,15 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
         
         guard let device = targetDevice else { return }
         
+        var devFormatStr = getDeviceFormatString(for: device.id)
+        if manualOverrideRate != nil {
+            devFormatStr += " [Manual]"
+        }
+        
         updateUI(
             status: track.name,
             trackFormat: trackFormatStr,
-            deviceFormat: getDeviceFormatString(for: device.id),
+            deviceFormat: devFormatStr,
             deviceName: device.name
         )
     }
@@ -488,30 +534,33 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
             return (override, nil) // Manual = rate only, let DAC choose depth
         }
         
-        // Priority 1: Local file metadata (both rate + depth)
+        // Discard codec when only querying format required for DAC
+        let (rate, depth, _) = determineOriginalFormat(for: track)
+        return (rate, depth)
+    }
+    
+    private func determineOriginalFormat(for track: MusicTrack) -> (sampleRate: Double, bitDepth: Int?, codec: String?) {
+        // Priority 1: Local file metadata (both rate + depth + codec)
         if let location = track.location {
             if let format = fileParser.getAudioFormat(path: location) {
                 // Local files: use actual bit depth if available
                 let depth = format.bitDepth ?? 16
-                return (format.sampleRate, depth)
+                return (format.sampleRate, depth, format.codec)
             }
         }
         
         // Priority 1.5: Direct AppleScript Rate (v1.3 Fix for Local Builds)
-        // If AppleScript gave us a valid rate, use it! It's much more reliable than logs for ad-hoc builds.
         if let scriptRate = track.sampleRate, scriptRate > 0 {
-             return (scriptRate, nil)
+             return (scriptRate, nil, nil)
         }
         
         // Priority 2: Streaming - use log-detected rate if available
         if let logRate = detectedStreamRate {
-            return (logRate, nil) // nil = ignore bit depth for streams
+            return (logRate, nil, nil)
         }
         
-        // Priority 3: Fallback for streams (CD quality)
-        // If we just cleared it, this returns 44.1 temporarily until logs catch up.
-        // This is safer than sticking to the old rate (e.g. 192k) which might be wrong.
-        return (44100.0, nil)
+        // Priority 3: Fallback for streams
+        return (44100.0, nil, nil)
     }
     
 
@@ -528,13 +577,16 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
         let devName = deviceName ?? "Default"
         
         // v2.0 Optimization: Avoid redundant delegate calls (polling is frequent)
+        // v1.4 Fix: Now also respects trackFormat changes so manual overrides bypass the deduplicator
         if status == lastReportedTrackName && 
+           trackFormat == lastReportedTrackFormat &&
            deviceFormat == lastReportedDeviceFormat && 
            devName == lastReportedDeviceName {
             return
         }
         
         lastReportedTrackName = status
+        lastReportedTrackFormat = trackFormat
         lastReportedDeviceFormat = deviceFormat
         lastReportedDeviceName = devName
         
@@ -553,5 +605,50 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
         // Reset state
         trackIdentityHash = ""
         isSwitchOperationApplied = false
+        
+        // v1.4: Schedule recovery — restart polling after cooldown
+        // Previously, killing pollTimer here meant nothing would ever call
+        // checkForTrackChange() again, even if Music was reopened.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+            guard let self = self, self.isRunning else { return }
+            if self.pollTimer == nil {
+                print("SwitcherService: Recovery — restarting poll timer after Music termination")
+                self.setPollInterval(self.playbackPollInterval)
+            }
+        }
+    }
+    
+    // MARK: - v1.4 Self-Check (Watchdog)
+    private func startSelfCheck() {
+        selfCheckTimer?.invalidate()
+        selfCheckTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            guard let self = self, self.isRunning else { return }
+            
+            // Check 1: Is the poll timer alive?
+            if self.pollTimer == nil || !self.pollTimer!.isValid {
+                print("SelfCheck: ⚠️ Poll timer is dead — restarting")
+                self.setPollInterval(self.playbackPollInterval)
+            }
+            
+            // Check 2: Is LogParser healthy?
+            if !self.logParser.isHealthy {
+                print("SelfCheck: ⚠️ LogParser unhealthy — forcing restart")
+                self.logParser.forceRestart()
+            }
+            
+            // Check 3: Is a pendingSwitchTimer stuck for too long? (> 30s means something failed)
+            // The normal max is 15s (30 attempts * 0.5s), so 30s means it's definitely stuck
+            if let pending = self.pendingSwitchTimer, pending.isValid {
+                // If we have a pending timer AND we haven't applied a switch, something may be stuck
+                if !self.isSwitchOperationApplied {
+                    print("SelfCheck: ⚠️ Pending switch timer seems stuck — clearing")
+                    pending.invalidate()
+                    self.pendingSwitchTimer = nil
+                    self.candidateRate = nil
+                    self.candidateRateStartTime = nil
+                    self.setPollInterval(self.playbackPollInterval)
+                }
+            }
+        }
     }
 }
