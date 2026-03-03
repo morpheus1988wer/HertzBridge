@@ -48,7 +48,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SwitcherServ
         
         // BRANDING HEADER
         let headerItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        _ = setupInfoItem(headerItem, title: "HertzBridge v1.4", isHeader: true)
+        _ = setupInfoItem(headerItem, title: "HertzBridge v1.5", isHeader: true)
         statusMenu.addItem(headerItem)
         statusMenu.addItem(NSMenuItem.separator())
         

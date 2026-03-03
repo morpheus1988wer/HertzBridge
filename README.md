@@ -4,24 +4,22 @@
 
 HertzBridge is a lightweight menu bar utility that automatically synchronizes your DAC's sample rate with the track currently playing in the macOS Music app (including Apple Music and local files). 
 
-## 🚀 Latest Version: v1.4 (Stable)
+## 🚀 Latest Version: v1.5 (Stable)
 
-This version features significant reliability upgrades to background log monitoring and complete UI aesthetics overhaul for tracking dynamic format layouts natively.
+This version adds system-level output device switching and fixes idle state recovery after background audio playback.
 
-### [Download HertzBridge v1.4 (DMG)](HertzBridge_v1.4.dmg)
+### [Download HertzBridge v1.5 (DMG)](HertzBridge_v1.5.dmg)
 
-### Key Improvements in v1.4:
-- **Watchdog & Self-Healing**: Automatically monitors the `log stream` utility in the background and restarts the engine if the connection silently dies.
-- **Race Condition Fix**: Ensured the track property detection cannot get indefinitely looped or jammed by forced Music terminations.
-- **Deep Codec Parsing**: Replaced blind extension-guessing with fully native `kAudioFormat` reads (ALAC, FLAC, AC3, PCM) directly from CoreAudio headers.
-- **Overhauled NSView Rendering**: Completely bypassed rigid macOS label styling to render unclickable, perfectly-left-aligned dynamic width labels in solid black.
-- **Instant Toggling**: Bypassed stream-stabilization waits when selecting a Manual Override rate, guaranteeing instant hardware sync.
+### Key Improvements in v1.5:
+- **System-Level Output Switching**: Selecting a device from "Select Output Device" now changes the macOS system default output — identical to switching in System Settings → Sound → Output.
+- **Background Audio Fix**: Fixed a bug where playing audio in another app while Apple Music was paused would leave HertzBridge stuck in "Idle" after resuming Music.
+- **CoreAudio Device Listener**: Added a system-level listener for default output device changes (Bluetooth connect/disconnect, another app releasing audio) that immediately re-checks Music playback.
 
 ---
 
 ## 📦 Installation
 
-1. Download the latest [HertzBridge v1.4 DMG](HertzBridge_v1.4.dmg).
+1. Download the latest [HertzBridge v1.5 DMG](HertzBridge_v1.5.dmg).
 2. Open the DMG and drag **HertzBridge.app** to your **Applications** folder.
 3. **Important:** Since this app is not signed with an Apple Developer certificate, macOS will block it on first launch.
 
@@ -56,10 +54,18 @@ HertzBridge operates by:
 *   **Log Parsing**: Monitoring `com.apple.Music` system logs for real-time streaming metadata.
 *   **Native Bridge**: Low-impact metadata fetching via in-process AppleScript.
 *   **CoreAudio (C-APIs)**: Direct hardware communication to set the physical clock without resampling.
+*   **Device Listener**: Monitors system default output changes for instant playback re-detection.
 
 ---
 
 ## 📜 Version History
+
+### v1.4 (Reliability)
+- **Watchdog & Self-Healing**: Automatically monitors the `log stream` utility in the background and restarts the engine if the connection silently dies.
+- **Race Condition Fix**: Ensured the track property detection cannot get indefinitely looped or jammed by forced Music terminations.
+- **Deep Codec Parsing**: Replaced blind extension-guessing with fully native `kAudioFormat` reads (ALAC, FLAC, AC3, PCM) directly from CoreAudio headers.
+- **Overhauled NSView Rendering**: Completely bypassed rigid macOS label styling to render unclickable, perfectly-left-aligned dynamic width labels in solid black.
+- **Instant Toggling**: Bypassed stream-stabilization waits when selecting a Manual Override rate, guaranteeing instant hardware sync.
 
 ### v1.3 (Optimization)
 - **AppleScript Rate Detection**: Direct sample rate fetching bypasses log permission restrictions for instant, reliable detection.
@@ -88,3 +94,4 @@ HertzBridge is a technical evolution of concepts pioneered by the community. Spe
 
 ---
 *Created with 💙 for the Hi-Fi community.*
+

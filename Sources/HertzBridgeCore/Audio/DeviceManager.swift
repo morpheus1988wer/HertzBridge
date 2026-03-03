@@ -5,6 +5,7 @@ public struct AudioDeviceInfo: Equatable {
     public let id: AudioDeviceID
     public let name: String
     public let sampleRate: Double // Nominal rate
+    public let transportType: String // USB, Built-in, Bluetooth, etc.
 }
 
 public struct StreamFormat {
@@ -124,11 +125,68 @@ public class DeviceManager {
         err = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, &nominalSampleRate)
         if err != noErr { nominalSampleRate = 0 }
         
+        // Transport Type
+        var transportType: UInt32 = 0
+        propertySize = UInt32(MemoryLayout<UInt32>.size)
+        propertyAddress.mSelector = kAudioDevicePropertyTransportType
+        err = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, &transportType)
+        let transportStr = (err == noErr) ? transportTypeToString(transportType) : "Unknown"
+        
         return AudioDeviceInfo(
             id: deviceID,
             name: deviceName as String,
-            sampleRate: nominalSampleRate
+            sampleRate: nominalSampleRate,
+            transportType: transportStr
         )
+    }
+    
+    private func transportTypeToString(_ type: UInt32) -> String {
+        switch type {
+        case kAudioDeviceTransportTypeBuiltIn:                    return "Built-in"
+        case kAudioDeviceTransportTypeUSB:                        return "USB"
+        case kAudioDeviceTransportTypeBluetooth:                  return "Bluetooth"
+        case kAudioDeviceTransportTypeBluetoothLE:                return "Bluetooth LE"
+        case kAudioDeviceTransportTypeHDMI:                       return "HDMI"
+        case kAudioDeviceTransportTypeDisplayPort:                return "DisplayPort"
+        case kAudioDeviceTransportTypeFireWire:                   return "FireWire"
+        case kAudioDeviceTransportTypeThunderbolt:                return "Thunderbolt"
+        case kAudioDeviceTransportTypeAirPlay:                    return "AirPlay"
+        case kAudioDeviceTransportTypeAVB:                        return "AVB"
+        case kAudioDeviceTransportTypePCI:                        return "PCI"
+        case kAudioDeviceTransportTypeAggregate:                  return "Aggregate"
+        case kAudioDeviceTransportTypeVirtual:                    return "Virtual"
+        case kAudioDeviceTransportTypeContinuityCaptureWired:     return "Continuity"
+        case kAudioDeviceTransportTypeContinuityCaptureWireless:  return "Continuity (Wireless)"
+        default:                                                  return "Unknown"
+        }
+    }
+    
+    // MARK: - System Default Output
+    
+    /// Sets the macOS system default output device.
+    /// This is equivalent to changing the output in System Settings → Sound → Output.
+    public func setDefaultOutputDevice(deviceID: AudioDeviceID) -> Bool {
+        var id = deviceID
+        let size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        
+        let err = AudioObjectSetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0,
+            nil,
+            size,
+            &id
+        )
+        
+        if err != noErr {
+            print("Failed to set default output device: \(err)")
+        }
+        return err == noErr
     }
     
     // MARK: - Format Control

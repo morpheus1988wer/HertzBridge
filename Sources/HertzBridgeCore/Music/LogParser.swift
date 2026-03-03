@@ -185,12 +185,30 @@ public class LogParser {
     }
 
     private func processLine(_ line: String) {
-        // Simple approach: just look for standard sample rate numbers in the line
+        // v1.4.1: Context-aware filtering
+        // The old approach of line.contains("44100") matched false positives like item IDs (317335::317341).
+        // We now require the line to contain audio-relevant keywords before trusting a rate number.
+        let audioKeywords = [
+            "SampleRate", "sample rate", "sampleRate",
+            "Hz", "hz",
+            "format", "Format",
+            "AudioQueue", "AudioConverter",
+            "nominal", "NominalSampleRate",
+            "output", "Output",
+            "kAudioDevice", "AQMEIO",
+            "sample_rate", "srate"
+        ]
+        
+        // Quick reject: if the line has no audio keywords, skip entirely
+        let lineLC = line.lowercased()
+        let hasAudioContext = audioKeywords.contains { lineLC.contains($0.lowercased()) }
+        guard hasAudioContext else { return }
+        
         for rateStr in ratePatterns {
             if line.contains(rateStr) {
                 if let rate = Double(rateStr) {
-                    // v1.4: Attempt to extract timestamp
                     let timestamp = extractTimestamp(from: line) ?? Date()
+                    print("LogParser: Matched \(rateStr)Hz in audio-context line")
                     delegate?.didDetectSampleRate(rate, at: timestamp)
                     return
                 }

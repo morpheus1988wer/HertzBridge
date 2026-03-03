@@ -26,7 +26,18 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
     
     // Public Configuration & State
     public weak var delegate: SwitcherServiceDelegate?
-    public var selectedDeviceID: AudioDeviceID? = nil
+    public var selectedDeviceID: AudioDeviceID? = nil {
+        didSet {
+            if let id = selectedDeviceID {
+                let success = deviceManager.setDefaultOutputDevice(deviceID: id)
+                print(success
+                    ? "🔊 System output switched to device \(id)"
+                    : "⚠️ Failed to switch system output to device \(id)")
+            }
+            // When nil ("System Default"), we don't change anything —
+            // the user wants to follow whatever macOS has selected.
+        }
+    }
     
     // UI State tracking (to prevent redundant flashes)
     private var lastReportedTrackName: String?
@@ -85,6 +96,10 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
                                                            object: nil)
     }
     
+    deinit {
+        removeDefaultDeviceListener()
+    }
+    
     public func start() {
         guard !isRunning else { return }
         isRunning = true
@@ -96,6 +111,10 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
         if let device = deviceManager.getDefaultOutputDevice() {
             _ = deviceManager.setFormat(deviceID: device.id, sampleRate: 44100.0)
         }
+        
+        // Listen for system default output device changes
+        // (e.g. another app releases audio, user switches in System Settings)
+        installDefaultDeviceListener()
         
         checkForTrackChange()
         setPollInterval(transitionPollInterval) // Start with fast polling
@@ -110,6 +129,7 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
         selfCheckTimer = nil
         pendingSwitchTimer?.invalidate()
         logParser.stopMonitoring()
+        removeDefaultDeviceListener()
     }
     
     private func setPollInterval(_ interval: TimeInterval) {
@@ -194,18 +214,9 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
     
     // MARK: - Notification Handling
     @objc private func musicPlayerStateChanged(notification: Notification) {
-        // v2.4: Cleaned up unused variable warning
-        // We just need to know if userInfo exists, we don't need to read it yet.
-        guard notification.userInfo != nil else { return }
-        
-        // v1.8: Removed Strict Filter
-        // We now react to ALL playerInfo notifications.
-        // It's better to poll unnecessarily (Aggressive Mode) than to miss a track change 
-        // because the notification didn't have "Name" or "Artist" keys yet.
-        // guard let _ = userInfo["Name"] as? String,
-        //       let _ = userInfo["Artist"] as? String else {
-        //     return
-        // }
+        // v2.5: Accept ALL notifications — even those without userInfo.
+        // Resume-after-background-audio can send playerInfo with nil userInfo,
+        // which was previously silently dropped, causing stuck Idle state.
         
         // Use throttle check to limit processing
         checkForTrackChange()
@@ -305,11 +316,13 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
             // Default behavior: Reset stability
             candidateRate = nil
             candidateRateStartTime = nil
-            // v2.3 Fix: Preserving Stream Rate
-            // We do NOT clear detectedStreamRate here.
-            // Since v2.0 "Dual-Trigger", the log (Rate Change) often arrives BEFORE this method (Track Change).
-            // If we clear it, we wipe the fresh valid rate we just saw, causing a fallback error.
-            // detectedStreamRate = nil
+            // v1.4.1 Fix: Clear detectedStreamRate on track change for streams.
+            // The old approach preserved it to avoid losing a "fresh" rate, but this caused
+            // stale/transient rates from log noise to persist across track changes.
+            // Album continuity (confirmedAlbumRate) handles same-album fast-path instead.
+            if track.location == nil {
+                detectedStreamRate = nil
+            }
             
             // v2.3: Force Last Change Time update to ensure we accept the log
             // We subtract 0.5s to ensure the log timestamp (which might be milliseconds ago) is accepted.
@@ -513,7 +526,7 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
             status: track.name,
             trackFormat: trackFormatStr,
             deviceFormat: devFormatStr,
-            deviceName: device.name
+            deviceName: "\(device.name) (\(device.transportType))"
         )
     }
     
@@ -644,4 +657,78 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
             }
         }
     }
+    
+    // MARK: - CoreAudio Default Device Listener
+    // Detects when macOS switches the default output (e.g. another app releases audio,
+    // user changes output in System Settings, or Bluetooth connects/disconnects).
+    // This is critical for escaping Idle state when Music resumes after background audio.
+    
+    private var defaultDeviceListenerInstalled = false
+    
+    private func installDefaultDeviceListener() {
+        guard !defaultDeviceListenerInstalled else { return }
+        
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        
+        let status = AudioObjectAddPropertyListener(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            defaultDeviceChangedCallback,
+            Unmanaged.passUnretained(self).toOpaque()
+        )
+        
+        if status == noErr {
+            defaultDeviceListenerInstalled = true
+            print("Installed CoreAudio default device listener")
+        } else {
+            print("Failed to install default device listener: \(status)")
+        }
+    }
+    
+    private func removeDefaultDeviceListener() {
+        guard defaultDeviceListenerInstalled else { return }
+        
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        
+        AudioObjectRemovePropertyListener(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            defaultDeviceChangedCallback,
+            Unmanaged.passUnretained(self).toOpaque()
+        )
+        
+        defaultDeviceListenerInstalled = false
+    }
+    
+    /// Called by CoreAudio when the system default output device changes.
+    @objc func handleDefaultDeviceChanged() {
+        print("🔄 System default output device changed — checking Music playback")
+        checkForTrackChange()
+        startAggressivePolling()
+    }
+}
+
+// CoreAudio C callback — must be a free function
+private func defaultDeviceChangedCallback(
+    _ objectID: AudioObjectID,
+    _ numAddresses: UInt32,
+    _ addresses: UnsafePointer<AudioObjectPropertyAddress>,
+    _ clientData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let clientData = clientData else { return noErr }
+    let service = Unmanaged<SwitcherService>.fromOpaque(clientData).takeUnretainedValue()
+    
+    // Hop to main thread for safety
+    DispatchQueue.main.async {
+        service.handleDefaultDeviceChanged()
+    }
+    return noErr
 }
