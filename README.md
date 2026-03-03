@@ -4,23 +4,24 @@
 
 HertzBridge is a lightweight menu bar utility that automatically synchronizes your DAC's sample rate with the track currently playing in the macOS Music app (including Apple Music and local files). 
 
-## 🚀 Latest Version: v1.3 (Stable)
+## 🚀 Latest Version: v1.4 (Stable)
 
-This version features comprehensive improvements to rate detection, UI responsiveness, and Music app termination handling.
+This version features significant reliability upgrades to background log monitoring and complete UI aesthetics overhaul for tracking dynamic format layouts natively.
 
-### [Download HertzBridge v1.3 (DMG)](HertzBridge_v1.3.dmg)
+### [Download HertzBridge v1.4 (DMG)](HertzBridge_v1.4.dmg)
 
-### Key Improvements in v1.3:
-- **AppleScript Rate Detection**: Direct sample rate fetching bypasses log permission restrictions for instant, reliable detection.
-- **Zero UI Flicker**: Eliminated "Detecting..." flashes by prioritizing AppleScript rates over log-based detection.
-- **Boot Loop Fix**: Comprehensive 5-layer protection prevents Music from relaunching when quit during playback.
-- **Enhanced Permissions**: Added `NSAppleEventsUsageDescription` for proper macOS automation access.
+### Key Improvements in v1.4:
+- **Watchdog & Self-Healing**: Automatically monitors the `log stream` utility in the background and restarts the engine if the connection silently dies.
+- **Race Condition Fix**: Ensured the track property detection cannot get indefinitely looped or jammed by forced Music terminations.
+- **Deep Codec Parsing**: Replaced blind extension-guessing with fully native `kAudioFormat` reads (ALAC, FLAC, AC3, PCM) directly from CoreAudio headers.
+- **Overhauled NSView Rendering**: Completely bypassed rigid macOS label styling to render unclickable, perfectly-left-aligned dynamic width labels in solid black.
+- **Instant Toggling**: Bypassed stream-stabilization waits when selecting a Manual Override rate, guaranteeing instant hardware sync.
 
 ---
 
 ## 📦 Installation
 
-1. Download the latest [HertzBridge v1.3 DMG](HertzBridge_v1.3.dmg).
+1. Download the latest [HertzBridge v1.4 DMG](HertzBridge_v1.4.dmg).
 2. Open the DMG and drag **HertzBridge.app** to your **Applications** folder.
 3. **Important:** Since this app is not signed with an Apple Developer certificate, macOS will block it on first launch.
 
@@ -59,6 +60,12 @@ HertzBridge operates by:
 ---
 
 ## 📜 Version History
+
+### v1.3 (Optimization)
+- **AppleScript Rate Detection**: Direct sample rate fetching bypasses log permission restrictions for instant, reliable detection.
+- **Zero UI Flicker**: Eliminated "Detecting..." flashes by prioritizing AppleScript rates over log-based detection.
+- **Boot Loop Fix**: Comprehensive 5-layer protection prevents Music from relaunching when quit during playback.
+- **Enhanced Permissions**: Added `NSAppleEventsUsageDescription` for proper macOS automation access.
 
 ### v1.2 (Stable)
 - **Zero-Loop Logic**: Resolved the "Detecting..." infinite loop.
