@@ -215,7 +215,8 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
     // MARK: - Notification Handling
     @objc private func musicPlayerStateChanged(notification: Notification) {
         // v1.5.1: Pass player state to bridge to prevent AppleScript quit interruptions
-        if let state = notification.userInfo?["Player State"] as? String {
+        let state = notification.userInfo?["Player State"] as? String
+        if let state = state {
              musicBridge.handlePlayerStateChange(state)
         }
         
@@ -229,7 +230,9 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
         // v1.7: Aggressive Polling Mode
         // We trigger a 5-second window of fast polling (0.5s) on EVERY notification.
         // This covers any variable latency from Music.app (100ms... 3s).
-        startAggressivePolling()
+        if state != "Stopped" {
+            startAggressivePolling()
+        }
     }
     
     private func checkForTrackChange() {

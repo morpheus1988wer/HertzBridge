@@ -12,7 +12,7 @@ This version adds system-level output device switching and fixes idle state reco
 
 ### Key Improvements in v1.5.1:
 - **Fixed Idle State Loop**: Resolved an issue where closing and later reopening the Music app would cause HertzBridge to be permanently stuck in an "Idle" or "Detecting..." loop. HertzBridge now reliably detects when you launch the Music app and intelligently restarts its audio stream listener.
-- **Fixed Apple Music Relaunch**: Resolves a race condition where manually quitting Apple Music would immediately cause macOS to relaunch it. HertzBridge now reliably detects the "Stopped" termination signal and delays queries to respectfully let Music terminate in peace.
+- **Fixed Apple Music Relaunch**: Resolves a race condition where manually quitting Apple Music would cause macOS to instantly relaunch it. To prevent this, HertzBridge now increases the AppleScript cooldown to 8.0 seconds and bypasses aggressive status polling when Music broadcasts a "Stopped" state, allowing it to fully quit without interruption.
 
 ### Key Improvements in v1.5:
 - **System-Level Output Switching**: Selecting a device from "Select Output Device" now changes the macOS system default output — identical to switching in System Settings → Sound → Output.

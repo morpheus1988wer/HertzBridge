@@ -79,8 +79,8 @@ public class MusicAppBridge {
         // If we instantly send an AppleScript, macOS interrupts the quit sequence and relaunches it.
         // By adding a short cooldown on "Stopped", we give Music time to fully terminate.
         if state == "Stopped" && !isMusicTerminating {
-            print("MusicAppBridge: Received 'Stopped' state, applying 2s AppleScript cooldown to prevent quit-interruption.")
-            terminationCooldown = Date().addingTimeInterval(2.0)
+            print("MusicAppBridge: Received 'Stopped' state, applying 8s AppleScript cooldown to prevent quit-interruption.")
+            terminationCooldown = Date().addingTimeInterval(8.0)
         } else if state == "Playing" || state == "Paused" {
             // Clear cooldown if it resumes normally
             if terminationCooldown > Date() && !isMusicTerminating {
