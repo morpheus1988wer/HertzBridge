@@ -214,6 +214,11 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
     
     // MARK: - Notification Handling
     @objc private func musicPlayerStateChanged(notification: Notification) {
+        // v1.5.1: Pass player state to bridge to prevent AppleScript quit interruptions
+        if let state = notification.userInfo?["Player State"] as? String {
+             musicBridge.handlePlayerStateChange(state)
+        }
+        
         // v2.5: Accept ALL notifications — even those without userInfo.
         // Resume-after-background-audio can send playerInfo with nil userInfo,
         // which was previously silently dropped, causing stuck Idle state.
@@ -600,6 +605,23 @@ public class SwitcherService: LogParserDelegate, MusicAppBridgeDelegate {
     }
     
     // MARK: - MusicAppBridgeDelegate
+    
+    public func musicAppDidLaunch() {
+        print("SwitcherService: Music launched - restarting LogParser and timers")
+        guard isRunning else { return }
+        
+        // Restart the LogParser so it binds to the newly launched Music process PID
+        logParser.forceRestart()
+        
+        // Wait 5.5 seconds before polling so we clear the `app.launchDate < 5.0` cooldown window
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.5) { [weak self] in
+            guard let self = self, self.isRunning else { return }
+            print("SwitcherService: Starting playback poll after launch cooldown")
+            self.setPollInterval(self.playbackPollInterval)
+            self.checkForTrackChange()
+        }
+    }
+    
     public func musicAppDidTerminate() {
         print("SwitcherService: Music terminated - halting all timers immediately")
         // Immediately stop all timers to prevent any queries during shutdown

@@ -3,6 +3,7 @@ import AppKit
 
 public protocol MusicAppBridgeDelegate: AnyObject {
     func musicAppDidTerminate()
+    func musicAppDidLaunch()
 }
 
 public struct MusicTrack {
@@ -35,6 +36,20 @@ public class MusicAppBridge {
             selector: #selector(appDidTerminate(_:)), 
             name: NSWorkspace.didTerminateApplicationNotification, 
             object: nil)
+            
+         NSWorkspace.shared.notificationCenter.addObserver(self, 
+            selector: #selector(appDidLaunch(_:)), 
+            name: NSWorkspace.didLaunchApplicationNotification, 
+            object: nil)
+    }
+    
+    @objc private func appDidLaunch(_ notification: Notification) {
+        if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+           app.bundleIdentifier == "com.apple.Music" {
+             print("MusicAppBridge: detected Music launch.")
+             isMusicTerminating = false
+             delegate?.musicAppDidLaunch()
+        }
     }
     
     @objc private func appDidTerminate(_ notification: Notification) {
@@ -53,9 +68,24 @@ public class MusicAppBridge {
                  guard let self = self else { return }
                  if self.isMusicTerminating {
                      print("MusicAppBridge: Safety reset — clearing termination flag after 6s")
-                     self.isMusicTerminating = false
-                 }
-             }
+                }
+            }
+        }
+    }
+    
+    public func handlePlayerStateChange(_ state: String) {
+        // v1.5.1: Race Condition Fix
+        // When Music is quitting, it broadcasts a "Stopped" state.
+        // If we instantly send an AppleScript, macOS interrupts the quit sequence and relaunches it.
+        // By adding a short cooldown on "Stopped", we give Music time to fully terminate.
+        if state == "Stopped" && !isMusicTerminating {
+            print("MusicAppBridge: Received 'Stopped' state, applying 2s AppleScript cooldown to prevent quit-interruption.")
+            terminationCooldown = Date().addingTimeInterval(2.0)
+        } else if state == "Playing" || state == "Paused" {
+            // Clear cooldown if it resumes normally
+            if terminationCooldown > Date() && !isMusicTerminating {
+                terminationCooldown = Date.distantPast
+            }
         }
     }
     

@@ -4,11 +4,15 @@
 
 HertzBridge is a lightweight menu bar utility that automatically synchronizes your DAC's sample rate with the track currently playing in the macOS Music app (including Apple Music and local files). 
 
-## 🚀 Latest Version: v1.5 (Stable)
+## 🚀 Latest Version: v1.5.1 (Stable)
 
 This version adds system-level output device switching and fixes idle state recovery after background audio playback.
 
-### [Download HertzBridge v1.5 (DMG)](HertzBridge_v1.5.dmg)
+### [Download HertzBridge v1.5.1 (DMG)](HertzBridge_v1.5.1.dmg)
+
+### Key Improvements in v1.5.1:
+- **Fixed Idle State Loop**: Resolved an issue where closing and later reopening the Music app would cause HertzBridge to be permanently stuck in an "Idle" or "Detecting..." loop. HertzBridge now reliably detects when you launch the Music app and intelligently restarts its audio stream listener.
+- **Fixed Apple Music Relaunch**: Resolves a race condition where manually quitting Apple Music would immediately cause macOS to relaunch it. HertzBridge now reliably detects the "Stopped" termination signal and delays queries to respectfully let Music terminate in peace.
 
 ### Key Improvements in v1.5:
 - **System-Level Output Switching**: Selecting a device from "Select Output Device" now changes the macOS system default output — identical to switching in System Settings → Sound → Output.
@@ -19,7 +23,7 @@ This version adds system-level output device switching and fixes idle state reco
 
 ## 📦 Installation
 
-1. Download the latest [HertzBridge v1.5 DMG](HertzBridge_v1.5.dmg).
+1. Download the latest [HertzBridge v1.5.1 DMG](HertzBridge_v1.5.1.dmg).
 2. Open the DMG and drag **HertzBridge.app** to your **Applications** folder.
 3. **Important:** Since this app is not signed with an Apple Developer certificate, macOS will block it on first launch.
 
